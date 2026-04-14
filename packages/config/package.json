@@ -1,0 +1,44 @@
+{
+  "name": "@agentic/config",
+  "version": "0.1.0",
+  "description": "Configuration system for AI agents — model tiers, API keys, identity, and validation",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "config",
+    "configuration",
+    "ai",
+    "agent",
+    "llm",
+    "model-tiers",
+    "api-keys"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
