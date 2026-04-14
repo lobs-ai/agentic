@@ -154,12 +154,21 @@ export function createClient(model: string, config?: ClientConfig): LLMClient {
       });
     }
 
-    case "opencode-zen":
-    case "opencode-go": {
+    case "opencode-zen": {
+      const apiKey = getKey("opencode-zen") ?? process.env.OPENCODE_API_KEY;
       return buildCompatibleClient({
-        provider,
-        apiKey: "not-required",
-        baseURL: getBaseUrl(provider),
+        provider: "opencode-zen",
+        apiKey,
+        baseURL: getBaseUrl("opencode-zen"),
+      });
+    }
+
+    case "opencode-go": {
+      const apiKey = getKey("opencode-go") ?? process.env.OPENCODE_API_KEY;
+      return buildCompatibleClient({
+        provider: "opencode-go",
+        apiKey,
+        baseURL: getBaseUrl("opencode-go"),
       });
     }
 

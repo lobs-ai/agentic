@@ -23,8 +23,8 @@ import { OpenAIClient } from "./openai.js";
 export const KNOWN_ENDPOINTS: Record<string, string> = {
   openrouter: "https://openrouter.ai/api/v1",
   lmstudio: "http://localhost:1234/v1",
-  "opencode-zen": "http://localhost:3000/v1",
-  "opencode-go": "http://localhost:3100/v1",
+  "opencode-zen": "https://opencode.ai/zen/v1",
+  "opencode-go": "https://opencode.ai/zen/go/v1",
   "z-ai": "https://api.z.ai/v1",
   minimax: "https://api.minimaxi.chat/v1",
   kimi: "https://api.moonshot.cn/v1",

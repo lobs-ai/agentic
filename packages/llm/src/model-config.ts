@@ -147,26 +147,100 @@ export const MODELS: ModelInfo[] = [
     capabilities: ["chat", "code", "reasoning", "tool-use"],
   },
 
-  // ── MiniMax ────────────────────────────────────────────────────────────────
+  // ── MiniMax (direct) ──────────────────────────────────────────────────────
   {
-    model: "minimax/MiniMax-M2.7",
+    model: "minimax/minimax-m2.7",
     displayName: "MiniMax M2.7",
     tier: "cheap",
     costPer1MInput: 0.20,
     costPer1MOutput: 1.00,
-    contextWindow: 32_768,
+    contextWindow: 1_048_576,
     quality: 84,
-    capabilities: ["chat", "code", "reasoning"],
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
   },
   {
-    model: "minimax/MiniMax-M2.5",
+    model: "minimax/minimax-m2.5",
     displayName: "MiniMax M2.5",
+    tier: "free",
+    costPer1MInput: 0.00,
+    costPer1MOutput: 0.00,
+    contextWindow: 1_048_576,
+    quality: 80,
+    capabilities: ["chat", "code", "tool-use"],
+  },
+
+  // ── OpenCode Zen (subscription — proprietary models via Anthropic/OpenAI APIs) ─
+  {
+    model: "opencode-zen/claude-sonnet-4",
+    displayName: "Claude Sonnet 4 (OpenCode Zen)",
+    tier: "standard",
+    costPer1MInput: 3.00,
+    costPer1MOutput: 15.00,
+    contextWindow: 200_000,
+    quality: 92,
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
+  },
+  {
+    model: "opencode-zen/gpt-5.1-codex",
+    displayName: "GPT-5.1 Codex (OpenCode Zen)",
+    tier: "standard",
+    costPer1MInput: 2.00,
+    costPer1MOutput: 8.00,
+    contextWindow: 1_047_576,
+    quality: 90,
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
+  },
+
+  // ── OpenCode Go (subscription — curated open models) ────────────────────────
+  {
+    model: "opencode-go/kimi-k2.5",
+    displayName: "Kimi K2.5 (OpenCode Go)",
+    tier: "cheap",
+    costPer1MInput: 0.42,
+    costPer1MOutput: 2.20,
+    contextWindow: 131_072,
+    quality: 85,
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
+  },
+  {
+    model: "opencode-go/minimax-m2.7",
+    displayName: "MiniMax M2.7 (OpenCode Go)",
     tier: "cheap",
     costPer1MInput: 0.20,
     costPer1MOutput: 1.00,
-    contextWindow: 32_768,
+    contextWindow: 1_048_576,
+    quality: 84,
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
+  },
+  {
+    model: "opencode-go/minimax-m2.5",
+    displayName: "MiniMax M2.5 (OpenCode Go)",
+    tier: "free",
+    costPer1MInput: 0.00,
+    costPer1MOutput: 0.00,
+    contextWindow: 1_048_576,
     quality: 80,
-    capabilities: ["chat", "code"],
+    capabilities: ["chat", "code", "tool-use"],
+  },
+  {
+    model: "opencode-go/glm-5.1",
+    displayName: "GLM-5.1 (OpenCode Go)",
+    tier: "cheap",
+    costPer1MInput: 0.50,
+    costPer1MOutput: 0.50,
+    contextWindow: 128_000,
+    quality: 83,
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
+  },
+  {
+    model: "opencode-go/mimo-v2-pro",
+    displayName: "MiMo V2 Pro (OpenCode Go)",
+    tier: "cheap",
+    costPer1MInput: 0.40,
+    costPer1MOutput: 1.60,
+    contextWindow: 128_000,
+    quality: 82,
+    capabilities: ["chat", "code", "reasoning", "tool-use"],
   },
 ];
 
@@ -188,27 +262,31 @@ export const FALLBACK_CHAINS: Record<string, string[]> = {
   /** High-quality agent work — reasoning and tool use required. */
   agent: [
     "anthropic/claude-sonnet-4-20250514",
+    "opencode-zen/claude-sonnet-4",
     "openai/gpt-4.1",
     "kimi/kimi-k2.5",
   ],
 
   /** Background tasks — cheap, good enough. */
   background: [
-    "minimax/MiniMax-M2.7",
+    "opencode-go/minimax-m2.7",
+    "minimax/minimax-m2.7",
     "kimi/kimi-k2.5",
     "openai/gpt-4.1-mini",
   ],
 
-  /** Summarization / classification — prefer cheap. */
+  /** Summarization / classification — prefer free/cheap. */
   cheap: [
+    "opencode-go/minimax-m2.5",
+    "minimax/minimax-m2.5",
     "openai/gpt-4.1-nano",
-    "minimax/MiniMax-M2.5",
     "anthropic/claude-haiku-4-20250514",
   ],
 
   /** Maximum quality — cost is not a concern. */
   premium: [
     "anthropic/claude-opus-4-20250514",
+    "opencode-zen/gpt-5.1-codex",
     "openai/gpt-4.1",
     "anthropic/claude-sonnet-4-20250514",
   ],
