@@ -1,2 +1,4 @@
-node_modules/\ndist/\n.env\n*.tgz
 node_modules/
+dist/
+.env
+*.tgz
