@@ -1,0 +1,54 @@
+{
+  "name": "@agentic/memory",
+  "version": "0.1.0",
+  "description": "Memory and knowledge system for AI agents — persist, search, and learn across sessions",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.50.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "memory",
+    "knowledge",
+    "sqlite",
+    "vector-search",
+    "embeddings",
+    "learning"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
