@@ -1,0 +1,48 @@
+{
+  "name": "@agentic/runner",
+  "version": "0.1.0",
+  "description": "Core agent execution loop — LLM ↔ tool cycle with multi-provider support, loop detection, context compaction, and hooks",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentic/llm": "^0.1.0",
+    "@agentic/tools": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "runner",
+    "loop",
+    "anthropic",
+    "openai",
+    "claude",
+    "tools",
+    "multi-provider"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

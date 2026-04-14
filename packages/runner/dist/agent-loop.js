@@ -1,0 +1,357 @@
+/**
+ * Agent loop — the core LLM ↔ tool execution cycle.
+ *
+ * Multi-provider: Anthropic (native), OpenAI, any OpenAI-compatible endpoint.
+ * Uses the @agentic/llm provider abstraction to normalise all responses.
+ *
+ * Loop:
+ * 1. Build system prompt
+ * 2. Call LLM with current messages + tool definitions
+ * 3. stop_reason == "end_turn" / "stop" → done
+ * 4. stop_reason == "tool_use" → execute tools → append results → goto 2
+ * 5. maxTurns exceeded or timeout → forced stop
+ */
+import { randomBytes } from "node:crypto";
+import { createResilientClient, parseModelString } from "@agentic/llm";
+import { MODEL_COSTS, } from "./types.js";
+import { getToolDefinitions, executeTool } from "./tool-registry.js";
+import { getHookRegistry } from "./hooks.js";
+import { LoopDetector } from "./loop-detector.js";
+import { shouldCompact, compactMessages } from "./context-manager.js";
+import { SessionTranscript } from "./session-transcript.js";
+// ── Constants ─────────────────────────────────────────────────────────────────
+const DEFAULT_MAX_TURNS = 100;
+const DEFAULT_MAX_TOKENS = 16384;
+const TOOL_TIMEOUT_MS = 5 * 60_000; // 5 minutes per tool call
+const TRANSIENT_ERRORS = ["overloaded", "529", "timeout", "network", "ECONNRESET"];
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function buildPostToolReminder(cwd, results) {
+    const succeeded = results.filter((r) => !r.is_error).length;
+    const failed = results.length - succeeded;
+    return [
+        "You have fresh tool results.",
+        `Working directory: ${cwd}`,
+        `Tool calls this round: ${results.length} total, ${succeeded} succeeded, ${failed} failed.`,
+        "Use these results to decide the next concrete step.",
+        "If the latest tool results already solve the user's request, respond and stop.",
+        "If you changed files, prefer a targeted verification step before concluding.",
+        "If the task is complete, stop instead of making extra tool calls.",
+        "If more work is needed, prefer the smallest next read/search/edit/exec action that reduces uncertainty.",
+    ].join("\n");
+}
+function isTransientError(message) {
+    const lower = message.toLowerCase();
+    return TRANSIENT_ERRORS.some((e) => lower.includes(e));
+}
+// ── Main Loop ─────────────────────────────────────────────────────────────────
+/**
+ * Run an agent through the LLM tool loop until completion, timeout, or
+ * max turns.
+ */
+export async function runAgent(spec) {
+    const { task, agent, model, cwd, timeout } = spec;
+    const maxTurns = spec.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTokens = spec.maxTokens ?? DEFAULT_MAX_TOKENS;
+    // ── IDs ───────────────────────────────────────────────────────────────────
+    const runId = randomBytes(8).toString("hex");
+    const taskId = spec.context?.taskId ?? runId;
+    const startTime = Date.now();
+    // ── Transcript ────────────────────────────────────────────────────────────
+    let transcript = null;
+    try {
+        transcript = new SessionTranscript(agent, runId);
+    }
+    catch {
+        // Transcript is best-effort — FS may not be available in all environments
+    }
+    // ── Hooks ─────────────────────────────────────────────────────────────────
+    const hooks = getHookRegistry();
+    // ── Provider ──────────────────────────────────────────────────────────────
+    const parsed = parseModelString(model);
+    const llm = spec.clientOverride ?? createResilientClient(model);
+    // ── System prompt ─────────────────────────────────────────────────────────
+    const systemPrompt = spec.systemPrompt ??
+        buildDefaultSystemPrompt(agent, spec.context?.notes);
+    // ── Tool definitions ──────────────────────────────────────────────────────
+    const toolDefs = getToolDefinitions(spec.tools);
+    // ── State ──────────────────────────────────────────────────────────────────
+    const messages = spec.initialMessages ?? [
+        { role: "user", content: task },
+    ];
+    let totalUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+    let totalCost = 0;
+    let turns = 0;
+    const loopDetector = new LoopDetector();
+    // ── beforeAgentStart hook ─────────────────────────────────────────────────
+    await hooks.emit("before_agent_start", {
+        agentType: agent,
+        taskId,
+        data: { task, model, cwd, tools: spec.tools },
+        timestamp: new Date(),
+    });
+    // ── Timeout guard ─────────────────────────────────────────────────────────
+    const timeoutMs = timeout * 1000;
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+    }, timeoutMs);
+    const finish = (succeeded, output, stopReason, error) => {
+        transcript?.writeComplete(runId, agent, succeeded, turns, totalUsage, stopReason, error);
+        return {
+            succeeded,
+            output,
+            error,
+            usage: totalUsage,
+            costUsd: totalCost,
+            turns,
+            runId,
+        };
+    };
+    try {
+        // ── Main loop ─────────────────────────────────────────────────────────
+        while (turns < maxTurns && !timedOut) {
+            turns++;
+            // ── Context compaction ──────────────────────────────────────────────
+            if (turns > 1 && shouldCompact(messages, model)) {
+                const compacted = compactMessages(messages);
+                messages.length = 0;
+                messages.push(...compacted);
+                await hooks.emit("session_compacted", {
+                    agentType: agent,
+                    taskId,
+                    data: { turnCount: turns, messageCount: messages.length },
+                    timestamp: new Date(),
+                });
+            }
+            // ── beforeLlmCall hook ──────────────────────────────────────────────
+            await hooks.emit("before_llm_call", {
+                agentType: agent,
+                taskId,
+                data: { messages, model, turn: turns },
+                timestamp: new Date(),
+            });
+            // ── LLM call ───────────────────────────────────────────────────────
+            let response;
+            try {
+                response = await llm.createMessage({
+                    system: systemPrompt,
+                    messages,
+                    tools: toolDefs,
+                    model: parsed.modelId,
+                    maxTokens,
+                });
+            }
+            catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                await hooks.emit("on_error", {
+                    agentType: agent,
+                    taskId,
+                    data: { phase: "llm_call", error: error.message, turn: turns },
+                    timestamp: new Date(),
+                });
+                if (isTransientError(error.message) && turns < maxTurns) {
+                    const waitMs = Math.min(2000 * 2 ** Math.min(turns - 1, 5), 60_000);
+                    await new Promise((r) => setTimeout(r, waitMs));
+                    turns--; // don't count the retry as a turn
+                    continue;
+                }
+                return finish(false, "", "llm_error", error.message);
+            }
+            // ── Usage accounting ────────────────────────────────────────────────
+            totalUsage = {
+                inputTokens: totalUsage.inputTokens + response.usage.inputTokens,
+                outputTokens: totalUsage.outputTokens + response.usage.outputTokens,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+            };
+            const modelId = parsed.modelId;
+            const rates = MODEL_COSTS[modelId] ?? { inputPerM: 3.0, outputPerM: 15.0 };
+            totalCost +=
+                (response.usage.inputTokens / 1_000_000) * rates.inputPerM +
+                    (response.usage.outputTokens / 1_000_000) * rates.outputPerM;
+            // ── afterLlmCall hook ───────────────────────────────────────────────
+            await hooks.emit("after_llm_call", {
+                agentType: agent,
+                taskId,
+                data: { response, model, turn: turns, usage: totalUsage, costUsd: totalCost },
+                timestamp: new Date(),
+            });
+            // ── Sanitize & append response ──────────────────────────────────────
+            const responseContent = spec.sanitizeResponseContent
+                ? spec.sanitizeResponseContent(response.content)
+                : response.content;
+            messages.push({ role: "assistant", content: responseContent });
+            // ── End-turn ────────────────────────────────────────────────────────
+            if (response.stopReason === "end_turn" ||
+                response.stopReason === "stop") {
+                const textBlock = responseContent.find((b) => b.type === "text");
+                const output = textBlock?.type === "text" ? (textBlock.text ?? "") : "";
+                await hooks.emit("after_agent_end", {
+                    agentType: agent,
+                    taskId,
+                    data: { succeeded: true, output, turns, usage: totalUsage, costUsd: totalCost },
+                    timestamp: new Date(),
+                });
+                return finish(true, output, "end_turn");
+            }
+            // ── Tool calls ───────────────────────────────────────────────────────
+            const toolUseBlocks = responseContent.filter((b) => b.type === "tool_use");
+            if (toolUseBlocks.length === 0) {
+                // No text, no tool use → treat as completion
+                const textBlock = responseContent.find((b) => b.type === "text");
+                const output = textBlock?.type === "text" ? (textBlock.text ?? "") : "";
+                return finish(true, output, "no_tool_use");
+            }
+            // ── Execute tools in parallel ────────────────────────────────────────
+            const toolResults = [];
+            await Promise.all(toolUseBlocks.map(async (block) => {
+                const toolUseId = block.id ?? "";
+                const blockName = block.name ?? "";
+                const blockInput = (block.input ?? {});
+                // beforeToolCall hook — returning null denies execution
+                const beforeEvent = await hooks.emit("before_tool_call", {
+                    agentType: agent,
+                    taskId,
+                    data: { toolName: blockName, toolInput: blockInput, toolUseId },
+                    timestamp: new Date(),
+                });
+                if (!beforeEvent) {
+                    toolResults.push({
+                        toolUseId,
+                        content: "Tool execution denied by policy.",
+                        is_error: true,
+                    });
+                    return;
+                }
+                const toolName = String(beforeEvent.data["toolName"] ?? blockName);
+                const toolInput = (beforeEvent.data["toolInput"] ?? blockInput);
+                spec.onProgress?.({
+                    type: "tool_start",
+                    agentType: agent,
+                    toolName,
+                    toolInput,
+                });
+                // Execute with timeout
+                let result;
+                try {
+                    const executePromise = spec.toolExecutor
+                        ? spec.toolExecutor(toolName, toolInput, toolUseId, cwd, {
+                            channelId: spec.context?.channelId,
+                            toolUseId,
+                        })
+                        : executeTool(toolName, toolInput, toolUseId, cwd);
+                    result = await Promise.race([
+                        executePromise,
+                        new Promise((_, reject) => setTimeout(() => reject(new Error("Tool execution timed out")), TOOL_TIMEOUT_MS)),
+                    ]);
+                }
+                catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    result = {
+                        toolUseId,
+                        content: `Tool error: ${msg}`,
+                        is_error: true,
+                    };
+                }
+                // Loop detection
+                const loopResult = loopDetector.record(toolName, toolInput, typeof result.content === "string"
+                    ? result.content
+                    : JSON.stringify(result.content));
+                if (loopResult.detected) {
+                    const annotation = loopResult.severity === "critical"
+                        ? `\n\n[LOOP DETECTED: ${loopResult.message}. You MUST try a different approach.]`
+                        : `\n\n[Warning: ${loopResult.message}]`;
+                    result = {
+                        ...result,
+                        content: (typeof result.content === "string"
+                            ? result.content
+                            : JSON.stringify(result.content)) + annotation,
+                    };
+                }
+                // afterToolCall hook — can override result
+                const afterEvent = await hooks.emit("after_tool_call", {
+                    agentType: agent,
+                    taskId,
+                    data: { toolName, toolInput, toolUseId, result },
+                    timestamp: new Date(),
+                });
+                const finalResult = afterEvent?.data["result"] ?? result;
+                toolResults.push(finalResult);
+                spec.onProgress?.({
+                    type: "tool_result",
+                    agentType: agent,
+                    toolName,
+                    toolInput,
+                    result: finalResult,
+                });
+            }));
+            // Sort results to match the original tool_use block order
+            const toolUseOrder = toolUseBlocks.map((b) => b.id);
+            toolResults.sort((a, b) => {
+                const ai = toolUseOrder.indexOf(a.toolUseId);
+                const bi = toolUseOrder.indexOf(b.toolUseId);
+                return ai - bi;
+            });
+            // Append tool results + reminder
+            messages.push({
+                role: "user",
+                content: [
+                    ...toolResults.map((r) => ({
+                        type: "tool_result",
+                        tool_use_id: r.toolUseId,
+                        content: typeof r.content === "string"
+                            ? r.content
+                            : JSON.stringify(r.content),
+                        is_error: r.is_error,
+                    })),
+                    {
+                        type: "text",
+                        text: buildPostToolReminder(cwd, toolResults),
+                    },
+                ],
+            });
+        } // end main loop
+        // ── maxTurns / timeout ─────────────────────────────────────────────────
+        const reason = timedOut ? "timeout" : "max_turns";
+        const errorMsg = reason === "timeout"
+            ? `Agent timed out after ${timeout}s`
+            : `Max turns (${maxTurns}) exceeded`;
+        await hooks.emit("after_agent_end", {
+            agentType: agent,
+            taskId,
+            data: {
+                succeeded: false,
+                output: "",
+                turns,
+                usage: totalUsage,
+                costUsd: totalCost,
+                stopReason: reason,
+            },
+            timestamp: new Date(),
+        });
+        return finish(false, "", reason, errorMsg);
+    }
+    finally {
+        clearTimeout(timeoutHandle);
+    }
+}
+// ── Default system prompt ─────────────────────────────────────────────────────
+function buildDefaultSystemPrompt(agentType, notes) {
+    const lines = [
+        `You are a ${agentType} agent. Complete the task given to you.`,
+        "",
+        "## Rules",
+        "- Use tools to gather information before making changes.",
+        "- Read files before editing them.",
+        "- Verify your work before concluding.",
+        "- Be precise and efficient — prefer targeted actions over broad sweeps.",
+        "- When the task is complete, stop.",
+    ];
+    if (notes) {
+        lines.push("", "## Context", notes);
+    }
+    return lines.join("\n");
+}
+// ── Token counting (re-export for callers) ────────────────────────────────────
+export { estimateTokens } from "./context-manager.js";
+//# sourceMappingURL=agent-loop.js.map
