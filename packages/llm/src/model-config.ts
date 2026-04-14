@@ -259,6 +259,14 @@ export const MODELS: ModelInfo[] = [
  * ```
  */
 export const FALLBACK_CHAINS: Record<string, string[]> = {
+  /** Balanced quality and cost — the default for most requests. */
+  standard: [
+    "anthropic/claude-sonnet-4-20250514",
+    "opencode-zen/claude-sonnet-4",
+    "openai/gpt-4.1",
+    "kimi/kimi-k2.5",
+  ],
+
   /** High-quality agent work — reasoning and tool use required. */
   agent: [
     "anthropic/claude-sonnet-4-20250514",
