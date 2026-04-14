@@ -1,0 +1,14 @@
+{
+    "name": "agentic",
+    "version": "0.1.0",
+    "private": true,
+    "description": "A modular toolkit for building AI agents \u2014 extracted from lobs-core",
+    "license": "MIT",
+    "scripts": {
+        "build": "echo TODO",
+        "typecheck": "tsc --noEmit"
+    },
+    "workspaces": [
+        "packages/*"
+    ]
+}
