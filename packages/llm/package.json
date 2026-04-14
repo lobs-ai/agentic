@@ -1,0 +1,46 @@
+{
+  "name": "@agentic/llm",
+  "version": "0.1.0",
+  "description": "Unified LLM client for Anthropic, OpenAI, and OpenAI-compatible providers with resilience built in",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "openai": "^4.97.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "llm",
+    "anthropic",
+    "openai",
+    "claude",
+    "gpt",
+    "ai",
+    "agent",
+    "resilient",
+    "multi-provider"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
