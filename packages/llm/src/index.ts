@@ -30,6 +30,15 @@
 // ── Core ──────────────────────────────────────────────────────────────────────
 
 export { createClient, parseModelString, KNOWN_ENDPOINTS } from "./client.js";
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+export { stripReasoning } from "./utils.js";
+
+// ── Model Discovery ───────────────────────────────────────────────────────────
+
+export { discoverModels } from "./discover.js";
+export type { DiscoveredModel, DiscoverOptions } from "./discover.js";
 export {
   createResilientClient,
   ResilientLLMClient,

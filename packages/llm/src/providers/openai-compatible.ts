@@ -25,7 +25,7 @@ export const KNOWN_ENDPOINTS: Record<string, string> = {
   lmstudio: "http://localhost:1234/v1",
   "opencode-zen": "https://opencode.ai/zen/v1",
   "opencode-go": "https://opencode.ai/zen/go/v1",
-  "z-ai": "https://api.z.ai/v1",
+  "z-ai": "https://api.z.ai/api/paas/v4",
   minimax: "https://api.minimaxi.chat/v1",
   kimi: "https://api.moonshot.cn/v1",
 };

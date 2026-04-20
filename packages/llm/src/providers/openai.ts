@@ -18,6 +18,7 @@ import type {
   ContentBlock,
   TokenUsage,
 } from "../types.js";
+import { stripReasoning } from "../utils.js";
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -182,7 +183,7 @@ export class OpenAIClient implements LLMClient {
     const content: ContentBlock[] = [];
 
     if (msg?.content) {
-      content.push({ type: "text", text: msg.content });
+      content.push({ type: "text", text: stripReasoning(msg.content) });
     }
 
     if (msg?.tool_calls) {
