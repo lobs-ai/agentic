@@ -15,9 +15,8 @@
  */
 
 // NodeNext module resolution + pptxgenjs UMD types lose the construct signature,
-// so we import the module, define minimal local interfaces for the subset we use,
-// and cast once at the constructor site.
-import _PptxModule from "pptxgenjs";
+// so we define minimal local interfaces for the subset we use and dynamically
+// import the module at first use (pptxgenjs is an optional peer dependency).
 import { randomBytes } from "node:crypto";
 import { BaseTool, type ToolContext } from "./base-tool.js";
 import type { ToolExecutorResult } from "./types.js";
@@ -44,9 +43,23 @@ interface PptxPresentation {
   writeFile(opts: { fileName: string }): Promise<string>;
 }
 
-// Cast to resolve NodeNext + UMD type ambiguity — runtime is correct.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PptxCtor = _PptxModule as unknown as new () => PptxPresentation;
+type PptxConstructor = new () => PptxPresentation;
+
+let _pptxCtor: PptxConstructor | null = null;
+async function loadPptxCtor(): Promise<PptxConstructor> {
+  if (_pptxCtor) return _pptxCtor;
+  try {
+    const mod = await import("pptxgenjs");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    _pptxCtor = ((mod as any).default ?? mod) as unknown as PptxConstructor;
+    return _pptxCtor;
+  } catch (err) {
+    throw new Error(
+      `The pptx tools require the "pptxgenjs" peer dependency. Install it with: npm install pptxgenjs`,
+      { cause: err },
+    );
+  }
+}
 
 // ── Shared in-memory state ────────────────────────────────────────────────────
 
@@ -143,8 +156,9 @@ export class PptxCreateTool extends BaseTool {
     required: [],
   };
 
-  run(params: Record<string, unknown>, _ctx: ToolContext): Promise<ToolExecutorResult> {
+  async run(params: Record<string, unknown>, _ctx: ToolContext): Promise<ToolExecutorResult> {
     const id = randomBytes(4).toString("hex");
+    const PptxCtor = await loadPptxCtor();
     const pres = new PptxCtor();
 
     if (params.title) pres.title = params.title as string;

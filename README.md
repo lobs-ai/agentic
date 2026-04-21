@@ -2,8 +2,37 @@
 
 A TypeScript runtime for building production AI agents. One package install gets you a complete agent loop: LLM routing, tool execution, session management, context compaction, resilience, and hot config reload.
 
+## Install
+
+Directly from GitHub (no npm publish required):
+
+```bash
+npm install "git+https://github.com/rafeleo/agentic.git"
 ```
-npm install agentic
+
+Pin a ref for reproducibility:
+
+```bash
+npm install "git+https://github.com/rafeleo/agentic.git#v0.1.0"
+```
+
+Requires Node ≥ 18. The `prepare` script runs `tsup` at install time and produces a single bundled `dist/` — no further build step needed in consumer projects.
+
+### Optional peer dependencies
+
+Install only what you use:
+
+| Feature | Peer |
+|---|---|
+| Discord subpath (`agentic/discord`) | `discord.js` |
+| `BrowserService` / `web_search` / `web_fetch` tools | `playwright` |
+| PowerPoint tools (`pptx_*`) | `pptxgenjs` |
+
+Example:
+
+```bash
+npm install discord.js          # for agentic/discord
+npm install playwright          # for the web tools
 ```
 
 ---
@@ -533,12 +562,18 @@ const result = await runAgent({
 
 ## Package layout
 
+Repo root is the installable `agentic` package (bundled via `tsup`). Internal workspaces provide the granular modules that get bundled in:
+
 ```
+src/              Root entry that re-exports from @agentic/runtime
 packages/
-  agentic/    Top-level runtime: AgenticRuntime, ConfigStore, PromptBuilder, extract()
-  llm/        Multi-provider LLM client, key management, resilience
-  runner/     Agent loop, Session, hooks, context engine, loop detection
-  tools/      9 built-in tools + ToolRegistry + BaseTool base class
+  runtime/        @agentic/runtime — AgenticRuntime, ConfigStore, PromptBuilder, extract()
+  llm/            @agentic/llm     — multi-provider LLM client, key management, resilience
+  runner/         @agentic/runner  — agent loop, Session, hooks, context engine
+  tools/          @agentic/tools   — built-in tools + ToolRegistry + BaseTool
+  discord/        @agentic/discord — exposed to consumers via the `agentic/discord` subpath
+  memory/         @agentic/memory  — persistent memory (not bundled into `agentic`; install directly if you need it)
+  config/         @agentic/config  — config types (internal)
 ```
 
 ---
@@ -546,9 +581,11 @@ packages/
 ## Development
 
 ```bash
-npm install
-npm run build       # build all packages
-npm run typecheck   # type-check without emitting
+npm install            # installs root + workspace deps
+npm run build          # bundles dist/{index,discord}.{js,d.ts} via tsup
+npm run build:packages # (optional) per-workspace tsc emits into each package's dist/
+npm run typecheck      # type-check without emitting
+npm test               # vitest
 ```
 
 ## License

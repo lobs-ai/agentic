@@ -22,7 +22,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "agentic": "^0.1.0",
+    "@agentic/runtime": "^0.1.0",
     "@agentic/runner": "^0.1.0",
     "@agentic/llm": "^0.1.0",
     "@agentic/tools": "^0.1.0",
@@ -33,6 +33,6 @@
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
-    "agentic": "^0.1.0"
+    "@agentic/runtime": "^0.1.0"
   }
 }

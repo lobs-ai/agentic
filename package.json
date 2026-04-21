@@ -1,19 +1,77 @@
 {
-    "name": "agentic",
-    "version": "0.1.0",
-    "private": true,
-    "description": "A modular toolkit for building AI agents — extracted from lobs-core",
-    "license": "MIT",
-    "scripts": {
-        "build": "for p in packages/llm packages/tools packages/runner packages/agentic packages/discord; do (cd $p && npx tsc); done",
-        "typecheck": "tsc --noEmit",
-        "test": "vitest run",
-        "test:watch": "vitest"
+  "name": "agentic",
+  "version": "0.1.0",
+  "description": "Zero-config agent runtime — one install, all providers, tool auto-discovery, pluggable context engine",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
-    "workspaces": [
-        "packages/*"
-    ],
-    "devDependencies": {
-        "vitest": "^4.1.4"
+    "./discord": {
+      "import": "./dist/discord.js",
+      "types": "./dist/discord.d.ts"
     }
+  },
+  "files": [
+    "dist",
+    "src",
+    "packages/llm/src",
+    "packages/tools/src",
+    "packages/runner/src",
+    "packages/runtime/src",
+    "packages/discord/src",
+    "LICENSE.txt",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:packages": "for p in packages/llm packages/tools packages/runner packages/runtime packages/discord; do (cd $p && npx tsc) || exit 1; done",
+    "typecheck": "tsc --noEmit",
+    "prepare": "[ -f node_modules/.bin/tsup ] && tsup || true",
+    "clean": "rm -rf dist packages/*/dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "workspaces": [
+    "packages/llm",
+    "packages/tools",
+    "packages/runner",
+    "packages/runtime",
+    "packages/discord"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "openai": "^4.97.0",
+    "yaml": "^2.7.0"
+  },
+  "peerDependencies": {
+    "discord.js": "^14.0.0",
+    "playwright": "^1.49.0",
+    "pptxgenjs": "^4.0.1"
+  },
+  "peerDependenciesMeta": {
+    "discord.js": {
+      "optional": true
+    },
+    "playwright": {
+      "optional": true
+    },
+    "pptxgenjs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "tsup": "^8.3.5",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.4"
+  }
 }

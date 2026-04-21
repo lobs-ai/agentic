@@ -73,6 +73,9 @@ export {
   PPTX_TOOLS,
 } from "./pptx.js";
 
+// ── HTML → PDF ────────────────────────────────────────────────────────────────
+export { HtmlToPdfTool, htmlToPdfTool } from "./html-to-pdf.js";
+
 // ── Built-in tool instances ───────────────────────────────────────────────────
 import { ReadTool } from "./read.js";
 import { WriteTool } from "./write.js";
@@ -83,6 +86,7 @@ import { GrepTool } from "./grep.js";
 import { GlobTool } from "./glob.js";
 import { FindFilesTool } from "./find-files.js";
 import { CodeSearchTool } from "./code-search.js";
+import { HtmlToPdfTool } from "./html-to-pdf.js";
 import { ToolRegistry } from "./registry.js";
 import type { ToolEntry } from "./types.js";
 import { readToolDefinition, readTool } from "./read.js";
@@ -106,6 +110,7 @@ export const BUILTIN_TOOLS = [
   new GlobTool(),
   new FindFilesTool(),
   new CodeSearchTool(),
+  new HtmlToPdfTool(),
 ] as const;
 
 /**

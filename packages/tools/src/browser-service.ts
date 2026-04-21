@@ -13,8 +13,24 @@
  *   await setupSearXNG(); // checks if running, starts Docker if not
  */
 
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import type { Browser, BrowserContext } from "playwright";
 import { spawn } from "node:child_process";
+
+/**
+ * Lazily import `playwright` so bundlers / consumers that don't use the browser
+ * tool never need it installed. Throws with a helpful message if it's missing.
+ */
+async function loadChromium() {
+  try {
+    const mod = await import("playwright");
+    return mod.chromium;
+  } catch (err) {
+    throw new Error(
+      `The browser tool requires the "playwright" peer dependency. Install it with: npm install playwright`,
+      { cause: err },
+    );
+  }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,6 +89,7 @@ export class BrowserService {
   }
 
   private async _launch(): Promise<void> {
+    const chromium = await loadChromium();
     this.browser = await chromium.launch({ headless: true });
     this.context = await this.browser.newContext({
       userAgent:

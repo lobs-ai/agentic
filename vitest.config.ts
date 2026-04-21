@@ -17,7 +17,8 @@ export default defineConfig({
       "@agentic/llm": path.resolve(__dirname, "packages/llm/src/index.ts"),
       "@agentic/tools": path.resolve(__dirname, "packages/tools/src/index.ts"),
       "@agentic/runner": path.resolve(__dirname, "packages/runner/src/index.ts"),
-      agentic: path.resolve(__dirname, "packages/agentic/src/index.ts"),
+      "@agentic/runtime": path.resolve(__dirname, "packages/runtime/src/index.ts"),
+      agentic: path.resolve(__dirname, "packages/runtime/src/index.ts"),
     },
   },
 });

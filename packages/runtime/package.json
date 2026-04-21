@@ -1,7 +1,7 @@
 {
-  "name": "agentic",
+  "name": "@agentic/runtime",
   "version": "0.1.0",
-  "description": "Zero-config agent runtime — one install, all providers, tool auto-discovery, pluggable context engine",
+  "description": "Top-level agent runtime — AgenticRuntime, ConfigStore, PromptBuilder. Internal; consumers install `agentic` instead.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,6 +15,7 @@
     "dist",
     "src"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",

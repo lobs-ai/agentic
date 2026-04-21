@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@agentic/llm": ["packages/llm/src/index.ts"],
+      "@agentic/tools": ["packages/tools/src/index.ts"],
+      "@agentic/runner": ["packages/runner/src/index.ts"],
+      "@agentic/runtime": ["packages/runtime/src/index.ts"],
+      "agentic": ["packages/runtime/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "packages/*/dist"]
+}
