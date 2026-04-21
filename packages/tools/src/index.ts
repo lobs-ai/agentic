@@ -60,6 +60,19 @@ export { BrowserService, browserService, setupSearXNG } from "./browser-service.
 export type { BrowserServiceOptions, SearchResult, FetchResult } from "./browser-service.js";
 export type { ExecToolOptions } from "./exec.js";
 
+// ── PowerPoint tools ──────────────────────────────────────────────────────────
+export {
+  PptxCreateTool,
+  PptxAddSlideTool,
+  PptxAddTextTool,
+  PptxAddImageTool,
+  PptxAddShapeTool,
+  PptxAddTableTool,
+  PptxAddChartTool,
+  PptxSaveTool,
+  PPTX_TOOLS,
+} from "./pptx.js";
+
 // ── Built-in tool instances ───────────────────────────────────────────────────
 import { ReadTool } from "./read.js";
 import { WriteTool } from "./write.js";
