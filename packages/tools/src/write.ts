@@ -3,6 +3,7 @@
  *
  * Creates the file if it doesn't exist, overwrites if it does.
  * Automatically creates parent directories.
+ * Updates the read snapshot so subsequent edits don't require a re-read.
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -46,34 +47,35 @@ export async function writeTool(
   params: Record<string, unknown>,
   cwd: string,
 ): Promise<string> {
-  const filePath = (params.path as string) ?? (params.file_path as string);
-  if (!filePath) throw new Error("path is required");
+  const rawPath = (params.file_path as string) ?? (params.path as string);
+  if (!rawPath) throw new Error("file_path is required");
 
-  const resolved = resolveToCwd(filePath, cwd);
+  const content = params.content as string;
+  if (content == null) throw new Error("content is required");
 
-  // Check if existing file was recently read (validation guard)
+  const resolved = resolveToCwd(rawPath, cwd);
+
   if (existsSync(resolved)) {
     const stat = statSync(resolved);
     if (stat.isDirectory()) {
       throw new Error(`Path is a directory: ${resolved}`);
     }
-    if (!hasRecentlyReadFile(resolved)) {
-      // Allow write anyway but warn
-      console.warn(`[write] Writing ${resolved} without a recent read snapshot`);
-    }
   }
 
-  const content = (params.content as string) ?? "";
-  const dir = dirname(resolved);
-  await mkdir(dir, { recursive: true });
+  await mkdir(dirname(resolved), { recursive: true });
   await writeFile(resolved, content, "utf-8");
 
-  updateReadSnapshot(resolved);
+  // Register snapshot so subsequent edits don't require a re-read
+  if (!hasRecentlyReadFile(rawPath, cwd)) {
+    const newStat = statSync(resolved);
+    updateReadSnapshot(resolved, content, newStat.mtimeMs, newStat.size);
+  }
 
-  return `File written: ${resolved} (${content.length} chars)`;
+  const bytes = Buffer.byteLength(content);
+  return `Write applied: ${rawPath}\nBytes written: ${bytes}`;
 }
 
-// ── Class-based API ───────────────────────────────────────────────────────────
+// ── Class-based API ──────────────────────────────────────────────────────────
 
 export class WriteTool extends BaseTool {
   readonly name = "write";

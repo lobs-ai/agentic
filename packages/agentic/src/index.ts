@@ -95,6 +95,11 @@ export {
   CodeSearchTool,
   capOutput,
   resolveToCwd,
+  clearRecentReadTracking,
+  createReadSnapshot,
+  hasRecentlyReadFile,
+  updateReadSnapshot,
+  getReadSnapshot,
 } from "@agentic/tools";
 export type {
   ToolDefinition,
@@ -104,6 +109,7 @@ export type {
   ToolEntry,
   ToolContext,
   ToolInputSchema,
+  ReadSnapshot,
 } from "@agentic/tools";
 
 // @agentic/runner

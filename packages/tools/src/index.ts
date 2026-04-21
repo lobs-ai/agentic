@@ -38,7 +38,9 @@ export {
   hasRecentlyReadFile,
   updateReadSnapshot,
   getReadSnapshot,
+  clearRecentReadTracking,
 } from "./read.js";
+export type { ReadSnapshot } from "./read.js";
 
 // ── Tool class instances ─────────────────────────────────────────────────────
 export { ReadTool, readToolDefinition, readTool } from "./read.js";

@@ -1,8 +1,9 @@
 /**
  * Read tool — read file contents.
  *
- * Supports offset/limit for large files, binary detection.
- * Output is truncated to ~500 lines / 50KB by default.
+ * Supports offset/limit for large files, binary detection, device file
+ * blocking, and a read-snapshot cache used by the Edit tool to enforce
+ * must-read-before-edit.
  */
 
 import { readFileSync, existsSync, statSync } from "node:fs";
@@ -32,7 +33,7 @@ export const readToolDefinition: ToolDefinition = {
       },
       offset: {
         type: "number",
-        description: "Optional 1-based line offset to start reading from",
+        description: "Optional 1-based line number to start reading from",
       },
       limit: {
         type: "number",
@@ -40,7 +41,7 @@ export const readToolDefinition: ToolDefinition = {
       },
       full: {
         type: "boolean",
-        description: "Return the entire text file without preview truncation",
+        description: "Return the entire file without truncation (fails for files > 200KB)",
       },
     },
     required: [],
@@ -49,60 +50,100 @@ export const readToolDefinition: ToolDefinition = {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_READ_LINES = 500;
-const DEFAULT_READ_CHARS = 50_000;
+const MAX_LINES = 2000;
+const DEFAULT_LINES = 500;
+const MAX_BYTES = 50 * 1024;
+const DEFAULT_BYTES = 50_000;
+const BINARY_CHECK_BYTES = 8192;
+const MAX_FULL_FILE_BYTES = 200 * 1024;
 
-// ── Read Snapshot (for write/edit validation) ───────────────────────────────
+const BLOCKED_DEVICE_PATHS = new Set([
+  "/dev/zero", "/dev/random", "/dev/urandom",
+  "/dev/full", "/dev/stdin", "/dev/tty", "/dev/console",
+]);
 
-interface ReadSnapshot {
-  mtime: number;
+// ── Read Snapshot Cache ──────────────────────────────────────────────────────
+
+export interface ReadSnapshot {
+  mtimeMs: number;
   size: number;
+  contentHash: string;
 }
 
-const readSnapshots = new Map<string, ReadSnapshot>();
+export const recentReadCache = new Map<string, ReadSnapshot>();
+export const recentlyReadFiles = new Set<string>();
+export const recentReadPaths = new Map<string, Set<string>>();
 
-/**
- * Record that a file was read (used by write/edit to verify a recent read).
- */
-export function createReadSnapshot(filePath: string): void {
-  try {
-    const st = statSync(filePath);
-    readSnapshots.set(filePath, { mtime: st.mtimeMs, size: st.size });
-  } catch {
-    // If stat fails (new file), store a zero snapshot
-    readSnapshots.set(filePath, { mtime: 0, size: 0 });
+function hashContent(content: string): string {
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    hash = ((hash << 5) - hash + content.charCodeAt(i)) | 0;
   }
+  return hash.toString(16);
 }
 
-/**
- * Returns true if the file has been read within the snapshot window.
- * Also verifies the file hasn't changed since it was last read.
- */
-export function hasRecentlyReadFile(filePath: string): boolean {
-  const snap = readSnapshots.get(filePath);
-  if (!snap) return false;
+export function createReadSnapshot(content: string, mtimeMs: number, size: number): ReadSnapshot {
+  return { mtimeMs, size, contentHash: hashContent(content) };
+}
 
-  try {
-    const st = statSync(filePath);
-    return snap.mtime === st.mtimeMs && snap.size === st.size;
-  } catch {
-    // For new files (don't exist yet), allow write
-    return true;
+function getOrCreateReadPathSet(resolved: string): Set<string> {
+  let set = recentReadPaths.get(resolved);
+  if (!set) {
+    set = new Set<string>();
+    recentReadPaths.set(resolved, set);
   }
+  return set;
 }
 
 /**
- * Update the read snapshot after a successful write (so subsequent edits are allowed).
+ * Returns true if the file has been recently read (and not changed since).
  */
-export function updateReadSnapshot(filePath: string): void {
-  createReadSnapshot(filePath);
+export function hasRecentlyReadFile(filePath: string, cwd: string): boolean {
+  const resolved = resolveToCwd(filePath, cwd);
+  if (recentlyReadFiles.has(resolved)) return true;
+  const aliases = recentReadPaths.get(resolved);
+  if (aliases && aliases.has(filePath)) return true;
+  return false;
 }
 
 /**
- * Get the read snapshot for a file (used by edit to check staleness).
+ * Get the read snapshot for a resolved path (checks all cache variants).
  */
-export function getReadSnapshot(filePath: string): ReadSnapshot | undefined {
-  return readSnapshots.get(filePath);
+export function getReadSnapshot(resolvedPath: string): ReadSnapshot | null {
+  for (const [key, value] of recentReadCache) {
+    if (key.startsWith(`${resolvedPath}:`)) return value;
+  }
+  return null;
+}
+
+/**
+ * Update snapshots after the file has been written/edited.
+ */
+export function updateReadSnapshot(resolvedPath: string, content: string, mtimeMs: number, size: number): void {
+  const snapshot = createReadSnapshot(content, mtimeMs, size);
+  for (const key of recentReadCache.keys()) {
+    if (key.startsWith(`${resolvedPath}:`)) {
+      recentReadCache.set(key, snapshot);
+    }
+  }
+  recentlyReadFiles.add(resolvedPath);
+}
+
+/** Clear all read tracking (useful in tests). */
+export function clearRecentReadTracking(): void {
+  recentReadCache.clear();
+  recentlyReadFiles.clear();
+  recentReadPaths.clear();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function isBinary(buffer: Buffer): boolean {
+  const check = buffer.subarray(0, Math.min(BINARY_CHECK_BYTES, buffer.length));
+  for (let i = 0; i < check.length; i++) {
+    if (check[i] === 0) return true;
+  }
+  return false;
 }
 
 // ── Tool Implementation ──────────────────────────────────────────────────────
@@ -111,56 +152,94 @@ export async function readTool(
   params: Record<string, unknown>,
   cwd: string,
 ): Promise<string> {
-  const rawPath = (params.file_path as string) ?? (params.path as string);
-  if (!rawPath) throw new Error("file_path is required");
+  const filePath = (params.file_path as string) ?? (params.path as string);
+  if (!filePath) throw new Error("file_path is required");
 
-  const filePath = resolveToCwd(rawPath, cwd);
+  const resolved = resolveToCwd(filePath, cwd);
 
-  if (!existsSync(filePath)) {
+  if (BLOCKED_DEVICE_PATHS.has(resolved)) {
+    throw new Error("Cannot read device file — would block or produce infinite output.");
+  }
+
+  if (!existsSync(resolved)) {
     throw new Error(`File not found: ${filePath}`);
   }
 
-  const stat = statSync(filePath);
+  const stat = statSync(resolved);
   if (stat.isDirectory()) {
-    throw new Error(`Path is a directory: ${filePath}. Use ls tool instead.`);
+    throw new Error(`${filePath} is a directory, not a file. Use the ls tool instead.`);
   }
 
-  // Binary detection
-  const buffer = readFileSync(filePath);
-  const isBinary = buffer.slice(0, 8000).some((b) => b === 0);
-  if (isBinary) {
-    createReadSnapshot(filePath);
-    return `[Binary file: ${filePath} (${stat.size} bytes)]`;
+  const buffer = readFileSync(resolved);
+
+  if (isBinary(buffer)) {
+    recentlyReadFiles.add(resolved);
+    return `Binary file (${stat.size} bytes): ${filePath}`;
   }
 
   const content = buffer.toString("utf-8");
   const lines = content.split("\n");
-
-  const offset = typeof params.offset === "number" ? params.offset - 1 : 0;
-  const limit =
-    typeof params.limit === "number" ? params.limit : DEFAULT_READ_LINES;
   const full = params.full === true;
+  const hasExplicitRange =
+    typeof params.offset === "number" || typeof params.limit === "number";
+  const offset = typeof params.offset === "number" ? Math.max(1, params.offset) : 1;
+  const limit = typeof params.limit === "number"
+    ? Math.max(1, params.limit)
+    : hasExplicitRange ? MAX_LINES : DEFAULT_LINES;
 
-  const slice = lines.slice(offset, offset + limit);
-  const numbered = slice
-    .map((line, i) => `${String(offset + i + 1).padStart(4, " ")}  ${line}`)
+  const cacheKey = `${resolved}:${full ? "full" : `${offset}:${limit}`}`;
+  const currentSnapshot = createReadSnapshot(content, stat.mtimeMs, stat.size);
+
+  if (full) {
+    if (stat.size > MAX_FULL_FILE_BYTES) {
+      throw new Error(
+        `File too large for full read (${stat.size} bytes). Use offset/limit for large files.`,
+      );
+    }
+    recentlyReadFiles.add(resolved);
+    getOrCreateReadPathSet(resolved).add(filePath);
+    recentReadCache.set(cacheKey, currentSnapshot);
+    return content;
+  }
+
+  const byteBudget = hasExplicitRange ? MAX_BYTES : DEFAULT_BYTES;
+  const startIdx = offset - 1;
+  const endIdx = Math.min(startIdx + limit, lines.length);
+  const sliced = lines.slice(startIdx, endIdx);
+
+  let result = sliced
+    .map((line, i) => `${String(startIdx + i + 1).padStart(6, " ")}\t${line}`)
     .join("\n");
 
-  createReadSnapshot(filePath);
+  if (Buffer.byteLength(result) > byteBudget) {
+    const truncated = result.slice(0, byteBudget);
+    const lastNl = truncated.lastIndexOf("\n");
+    result = lastNl > byteBudget * 0.7 ? truncated.slice(0, lastNl) : truncated;
+    const shownLines = result.split("\n").length;
+    const from = offset + shownLines;
+    result += `\n\n[Truncated. ${lines.length - (startIdx + shownLines)} more lines. Use offset=${from} to continue.]`;
+    recentlyReadFiles.add(resolved);
+    getOrCreateReadPathSet(resolved).add(filePath);
+    recentReadCache.set(cacheKey, currentSnapshot);
+    return result;
+  }
 
-  if (full) return numbered;
+  const meta: string[] = [];
+  if (startIdx > 0 || endIdx < lines.length) {
+    meta.push(`Lines ${offset}–${endIdx} of ${lines.length}`);
+  }
+  if (endIdx < lines.length) {
+    meta.push(`${lines.length - endIdx} more lines. Use offset=${endIdx + 1} to continue.`);
+  }
 
-  // Apply truncation for preview mode
-  if (numbered.length <= DEFAULT_READ_CHARS) return numbered;
-
-  const truncated = numbered.slice(0, DEFAULT_READ_CHARS);
-  const lastNewline = truncated.lastIndexOf("\n");
-  const safe = lastNewline > 0 ? truncated.slice(0, lastNewline) : truncated;
-  const shown = safe.split("\n").length;
-  return safe + `\n\n[Truncated. Shown ${shown}/${slice.length} lines. Use offset/limit for more.]`;
+  const finalResult = meta.length > 0 ? `${result}\n\n[${meta.join(". ")}]` : result;
+  recentlyReadFiles.add(resolved);
+  getOrCreateReadPathSet(resolved).add(filePath);
+  recentReadCache.set(cacheKey, currentSnapshot);
+  return finalResult;
 }
 
-// ── Class-based API ───────────────────────────────────────────────────────────
+// ── Class-based API ──────────────────────────────────────────────────────────
 
 export class ReadTool extends BaseTool {
   readonly name = "read";
