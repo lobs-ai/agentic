@@ -76,6 +76,11 @@ export interface AgentConfig {
   context?: AgentContext;
   /** Progress callback. */
   onProgress?: (update: ProgressUpdate) => void;
+  /**
+   * Called for each text token streamed from the LLM.
+   * When provided the loop uses the provider's streaming API.
+   */
+  onTextChunk?: (text: string) => void;
   /** Shared session for live message history access. */
   session?: Session;
 }
@@ -155,6 +160,7 @@ export class Agent {
       toolExecutor: merged.toolExecutor,
       context: merged.context,
       onProgress: merged.onProgress,
+      onTextChunk: merged.onTextChunk,
       session: merged.session,
     };
     return runAgent(spec);

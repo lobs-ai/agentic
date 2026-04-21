@@ -256,6 +256,41 @@ export class DiscordService {
     }).catch(() => {});
   }
 
+  /**
+   * Send a message and return its Discord message ID.
+   * Returns null when not connected or on error.
+   * Content is capped at the Discord 2000-char limit (no splitting).
+   */
+  async sendReturningId(channelId: string, content: string): Promise<string | null> {
+    if (!this.isReady || !this.client || !/^\d+$/.test(channelId)) return null;
+    try {
+      const ch = await this.client.channels.fetch(channelId);
+      if (!ch?.isTextBased()) return null;
+      const msg = await (ch as TextChannel).send(content.slice(0, DISCORD_MAX_MSG));
+      return msg.id;
+    } catch (err) {
+      console.error(`[discord] sendReturningId failed channel=${channelId}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Edit an existing message in place.
+   * Content is capped at the Discord 2000-char limit.
+   * Silently no-ops on error (the original message stays).
+   */
+  async editMessage(channelId: string, messageId: string, content: string): Promise<void> {
+    if (!this.isReady || !this.client) return;
+    try {
+      const ch = await this.client.channels.fetch(channelId);
+      if (!ch?.isTextBased()) return;
+      const msg = await (ch as TextChannel).messages.fetch(messageId);
+      await msg.edit(content.slice(0, DISCORD_MAX_MSG));
+    } catch {
+      // Silently ignore — the message may have been deleted or permissions changed
+    }
+  }
+
   /** Reply to a specific message. Falls back to send() on error. */
   async reply(channelId: string, messageId: string, content: string): Promise<void> {
     if (!this.isReady || !this.client) return;

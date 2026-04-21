@@ -179,4 +179,72 @@ export class AnthropicClient implements LLMClient {
       ...(thinkingContent !== undefined ? { thinkingContent } : {}),
     };
   }
+
+  async streamMessage(
+    params: CreateMessageParams,
+    onChunk: (text: string) => void,
+  ): Promise<LLMResponse> {
+    const { model, system, messages, tools, maxTokens, thinking } = params;
+
+    const requestBody: Record<string, unknown> = {
+      model,
+      system,
+      messages: buildAnthropicMessages(messages),
+      max_tokens: maxTokens,
+      tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
+    };
+
+    if (thinking) {
+      if (thinking.type === "enabled") {
+        requestBody.thinking = { type: "enabled", budget_tokens: thinking.budgetTokens };
+        requestBody.betas = ["interleaved-thinking-2025-05-14"];
+        requestBody.temperature = 1;
+      } else if (thinking.type === "adaptive") {
+        requestBody.thinking = { type: "adaptive" };
+        requestBody.temperature = 1;
+      }
+    }
+
+    type StreamType = AsyncIterable<{ type: string; delta?: { type: string; text?: string } }> & {
+      text_stream: AsyncIterable<string>;
+      finalMessage(): Promise<Anthropic.Message>;
+    };
+
+    const stream = (
+      this.sdk.messages.stream as unknown as (p: Record<string, unknown>) => StreamType
+    )(requestBody);
+
+    for await (const text of stream.text_stream) {
+      onChunk(text);
+    }
+
+    const raw = await stream.finalMessage();
+    const content: ContentBlock[] = [];
+    let thinkingContent: string | undefined;
+
+    for (const block of raw.content) {
+      if (block.type === "thinking") {
+        thinkingContent = (thinkingContent ?? "") + (block as { thinking?: string }).thinking;
+      } else if (block.type === "text") {
+        content.push({ type: "text", text: block.text });
+      } else if (block.type === "tool_use") {
+        content.push({ type: "tool_use", id: block.id, name: block.name, input: block.input as Record<string, unknown> });
+      }
+    }
+
+    const rawUsage = raw.usage as unknown as Record<string, unknown>;
+    const usage: TokenUsage = {
+      inputTokens: (rawUsage.input_tokens as number) ?? 0,
+      outputTokens: (rawUsage.output_tokens as number) ?? 0,
+      cacheReadTokens: (rawUsage.cache_read_input_tokens as number) ?? 0,
+      cacheWriteTokens: (rawUsage.cache_creation_input_tokens as number) ?? 0,
+    };
+
+    return {
+      content,
+      stopReason: mapStopReason(raw.stop_reason),
+      usage,
+      ...(thinkingContent !== undefined ? { thinkingContent } : {}),
+    };
+  }
 }

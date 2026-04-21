@@ -30,7 +30,7 @@
  */
 
 import type { AgenticRuntime } from "agentic";
-import { type Agent, type SessionStore } from "@agentic/runner";
+import { type Agent, type SessionStore, type ProgressUpdate } from "@agentic/runner";
 import type { DiscordBotConfig, InboundMessage } from "./types.js";
 import { DiscordService } from "./service.js";
 import { DiscordSessionManager } from "./sessions.js";
@@ -137,9 +137,20 @@ export interface DiscordBotOptions {
 
   /**
    * Show a typing indicator while the agent processes a message.
+   * The indicator is refreshed every 8 seconds so it persists through
+   * long-running tasks (Discord expires it after ~10s otherwise).
    * Default: true.
    */
   showTyping?: boolean;
+
+  /**
+   * Stream LLM output progressively into Discord by editing a message
+   * as tokens arrive. When false, the full response is sent at once.
+   *
+   * Requires the LLM provider to support streaming (Anthropic and OpenAI do).
+   * Default: true.
+   */
+  streamResponse?: boolean;
 
   /**
    * Called after each successful agent run.
@@ -172,6 +183,7 @@ export class DiscordBot {
     systemPrompt: string;
     timeout: number;
     showTyping: boolean;
+    streamResponse: boolean;
   };
   private readonly sessions: DiscordSessionManager;
   private readonly queues = new Map<string, Promise<void>>();
@@ -184,6 +196,7 @@ export class DiscordBot {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       timeout: 120,
       showTyping: true,
+      streamResponse: true,
       ...options,
     };
     this.service = new DiscordService();
@@ -240,30 +253,84 @@ export class DiscordBot {
   }
 
   private async process(msg: InboundMessage): Promise<void> {
-    if (this.opts.showTyping) this.service.sendTyping(msg.channelId);
+    // Recurring typing indicator — Discord expires it after ~10s so we refresh every 8s
+    let typingTimer: ReturnType<typeof setInterval> | null = null;
+    if (this.opts.showTyping) {
+      this.service.sendTyping(msg.channelId);
+      typingTimer = setInterval(() => this.service.sendTyping(msg.channelId), 8_000);
+    }
 
     const session = await this.sessions.get(msg.channelId);
     session._ref().push({ role: "user", content: buildUserContent(msg) });
-
     const agent = this.resolveAgent(msg);
 
+    // Streaming state
+    let progressMsgId: string | undefined;
+    let accumulated = "";
+    let lastEditAt = 0;
+
+    const flushEdit = async (text: string, force = false): Promise<void> => {
+      const now = Date.now();
+      if (!force && now - lastEditAt < 800) return; // throttle to ~1 edit/s
+      if (!progressMsgId) {
+        progressMsgId = (await this.service.sendReturningId(msg.channelId, text)) ?? undefined;
+      } else {
+        await this.service.editMessage(msg.channelId, progressMsgId, text);
+      }
+      lastEditAt = Date.now();
+    };
+
+    // Callbacks wired into the agent run
+    const onTextChunk = this.opts.streamResponse
+      ? (chunk: string): void => {
+          accumulated += chunk;
+          flushEdit(accumulated).catch(() => {});
+        }
+      : undefined;
+
+    const onProgress = (update: ProgressUpdate): void => {
+      if (update.type === "tool_start" && update.toolName) {
+        // Reset accumulated so next LLM response starts fresh
+        accumulated = "";
+        const status = `*Running \`${update.toolName}\`...*`;
+        flushEdit(status, true).catch(() => {});
+      }
+    };
+
     try {
-      // Pass msg.content as the task for hooks/transcripts — it's not added
-      // to messages again because we already seeded the session above.
-      const result = await agent.withSession(session).run(msg.content);
+      const result = await agent.withSession(session).run(msg.content, {
+        onTextChunk,
+        onProgress,
+      });
+
+      if (typingTimer) clearInterval(typingTimer);
+
       const response = result.output || "(no response)";
-      await this.service.send(msg.channelId, response);
+      if (progressMsgId) {
+        // Final confirmed output — replace the streaming draft
+        await this.service.editMessage(msg.channelId, progressMsgId, response);
+      } else {
+        await this.service.send(msg.channelId, response);
+      }
+
       this.opts.onComplete?.(msg.channelId, msg, {
         output: response,
         turns: result.turns,
         costUsd: result.costUsd,
       });
     } catch (err) {
+      if (typingTimer) clearInterval(typingTimer);
       console.error(`[discord-bot] Agent error in ${msg.channelId}:`, err);
       const reply =
         (await this.opts.onError?.(msg.channelId, msg, err)) ??
         "Sorry, I ran into an error processing your request.";
-      await this.service.send(msg.channelId, reply);
+      if (progressMsgId) {
+        await this.service.editMessage(msg.channelId, progressMsgId, reply).catch(() =>
+          this.service.send(msg.channelId, reply),
+        );
+      } else {
+        await this.service.send(msg.channelId, reply);
+      }
     }
   }
 

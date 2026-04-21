@@ -263,6 +263,46 @@ export class ResilientLLMClient implements LLMClient {
   }
 
   /**
+   * Stream a message from the primary model.
+   *
+   * Uses the primary model's `streamMessage` implementation when available.
+   * Falls back to `createMessage` (non-streaming) if streaming is unsupported
+   * or fails — the `onChunk` callback will not be called in that case.
+   */
+  async streamMessage(
+    params: CreateMessageParams,
+    onChunk: (text: string) => void,
+  ): Promise<LLMResponse> {
+    const primaryModel = this.models[0];
+    if (!primaryModel) return this.createMessage(params);
+
+    const { provider, modelId } = parseModelString(primaryModel);
+    const keyManager = getKeyManager();
+
+    let perAttemptConfig = this.clientConfig;
+    if (keyManager.hasKeys(provider)) {
+      const auth = keyManager.getAuth(provider, this.sessionId);
+      if (auth?.apiKey) {
+        perAttemptConfig = {
+          ...this.clientConfig,
+          keys: { ...this.clientConfig?.keys, [provider]: { keys: [{ key: auth.apiKey, label: auth.label }] } },
+        };
+      }
+    }
+
+    try {
+      const client = createClient(primaryModel, perAttemptConfig);
+      if (client.streamMessage) {
+        return await client.streamMessage({ ...params, model: modelId }, onChunk);
+      }
+    } catch (err) {
+      console.warn(`[resilient-client] streamMessage failed, falling back to createMessage: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    return this.createMessage(params);
+  }
+
+  /**
    * Get the log of all attempts made during the last `createMessage()` call.
    * Useful for debugging and observability.
    */

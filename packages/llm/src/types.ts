@@ -157,6 +157,17 @@ export interface CreateMessageParams {
  */
 export interface LLMClient {
   createMessage(params: CreateMessageParams): Promise<LLMResponse>;
+  /**
+   * Stream a message, calling `onChunk` for each text delta.
+   *
+   * Semantically identical to `createMessage` — returns the same `LLMResponse`
+   * once generation is complete. Providers that don't implement streaming
+   * can leave this undefined; callers fall back to `createMessage`.
+   *
+   * Only text tokens are streamed. Tool-call input JSON is accumulated
+   * internally and appears in the returned `LLMResponse.content` as normal.
+   */
+  streamMessage?(params: CreateMessageParams, onChunk: (text: string) => void): Promise<LLMResponse>;
 }
 
 // ── Provider Types ────────────────────────────────────────────────────────────

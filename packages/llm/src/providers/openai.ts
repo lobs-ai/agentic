@@ -217,4 +217,78 @@ export class OpenAIClient implements LLMClient {
       usage,
     };
   }
+
+  async streamMessage(
+    params: CreateMessageParams,
+    onChunk: (text: string) => void,
+  ): Promise<LLMResponse> {
+    const { model, system, messages, tools, maxTokens } = params;
+    const openAIMessages = buildOpenAIMessages(system, messages);
+    const openAITools: OpenAITool[] = tools.map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.input_schema as Record<string, unknown> },
+    }));
+
+    const stream = await this.sdk.chat.completions.create({
+      model,
+      messages: openAIMessages,
+      max_tokens: maxTokens,
+      ...(openAITools.length > 0 ? { tools: openAITools } : {}),
+      stream: true as const,
+    });
+
+    let textContent = "";
+    let finishReason: string | null = null;
+    const toolCallsMap = new Map<number, { id: string; name: string; args: string }>();
+    let promptTokens = 0;
+    let completionTokens = 0;
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      if (!choice) continue;
+
+      finishReason = choice.finish_reason ?? finishReason;
+
+      const delta = choice.delta;
+      if (delta.content) {
+        textContent += delta.content;
+        onChunk(delta.content);
+      }
+
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const existing = toolCallsMap.get(tc.index) ?? { id: "", name: "", args: "" };
+          toolCallsMap.set(tc.index, {
+            id: existing.id || tc.id || "",
+            name: existing.name || tc.function?.name || "",
+            args: existing.args + (tc.function?.arguments ?? ""),
+          });
+        }
+      }
+
+      // usage may appear in the last chunk (stream_options: include_usage)
+      if ((chunk as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage) {
+        const u = (chunk as { usage: { prompt_tokens?: number; completion_tokens?: number } }).usage;
+        promptTokens = u.prompt_tokens ?? promptTokens;
+        completionTokens = u.completion_tokens ?? completionTokens;
+      }
+    }
+
+    const content: ContentBlock[] = [];
+    if (textContent) content.push({ type: "text", text: stripReasoning(textContent) });
+    for (const [, tc] of toolCallsMap) {
+      let input: Record<string, unknown> = {};
+      try { input = JSON.parse(tc.args); } catch { /* malformed */ }
+      content.push({ type: "tool_use", id: tc.id, name: tc.name, input });
+    }
+
+    const usage: TokenUsage = {
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    };
+
+    return { content, stopReason: mapFinishReason(finishReason), usage };
+  }
 }

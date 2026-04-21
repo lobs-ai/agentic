@@ -188,13 +188,18 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
       // ── LLM call ───────────────────────────────────────────────────────
       let response;
       try {
-        response = await llm.createMessage({
+        const llmParams = {
           system: systemPrompt,
           messages,
           tools: toolDefsForLlm,
           model: parsed.modelId,
           maxTokens,
-        });
+        };
+        if (spec.onTextChunk && llm.streamMessage) {
+          response = await llm.streamMessage(llmParams, spec.onTextChunk);
+        } else {
+          response = await llm.createMessage(llmParams);
+        }
       } catch (err: unknown) {
         const error = err instanceof Error ? err : new Error(String(err));
 

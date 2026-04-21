@@ -52,6 +52,13 @@ export { GrepTool, grepToolDefinition, grepTool } from "./grep.js";
 export { GlobTool, globToolDefinition, globTool } from "./glob.js";
 export { FindFilesTool, findFilesToolDefinition, findFilesTool } from "./find-files.js";
 export { CodeSearchTool, codeSearchToolDefinition, codeSearchTool } from "./code-search.js";
+export { WebSearchTool, webSearchToolDefinition, webSearchTool } from "./web-search.js";
+export type { WebSearchToolOptions } from "./web-search.js";
+export { WebFetchTool, webFetchToolDefinition, webFetchTool } from "./web-fetch.js";
+export type { WebFetchToolOptions } from "./web-fetch.js";
+export { BrowserService, browserService, setupSearXNG } from "./browser-service.js";
+export type { BrowserServiceOptions, SearchResult, FetchResult } from "./browser-service.js";
+export type { ExecToolOptions } from "./exec.js";
 
 // ── Built-in tool instances ───────────────────────────────────────────────────
 import { ReadTool } from "./read.js";

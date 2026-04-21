@@ -69,6 +69,23 @@ export interface AgentSpec {
   /** Callback fired on progress events (tool start/result, phase changes). */
   onProgress?: (update: ProgressUpdate) => void;
 
+  /**
+   * Called for each text token as it streams from the LLM.
+   *
+   * When provided, the agent loop uses the LLM client's `streamMessage`
+   * method (if available) so text appears incrementally. Falls back to
+   * non-streaming when the provider doesn't support it.
+   *
+   * Note: called for every LLM turn, not just the final response.
+   * Between turns the accumulated text is reset when tool calls begin.
+   *
+   * @example Discord progressive message edit
+   * ```ts
+   * onTextChunk: (text) => updateDiscordMessage(accumulated + text),
+   * ```
+   */
+  onTextChunk?: (text: string) => void;
+
   /** Model tier hint used for selecting fallback chains. */
   modelTier?: string;
 

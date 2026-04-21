@@ -21,7 +21,9 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
   "devDependencies": {
     "@types/node": "^20.19.39",
     "typescript": "^5.8.3"
