@@ -2,10 +2,24 @@
  * @agentic/runner — public API
  *
  * The standalone agent execution loop package.
- * Import `runAgent` and provide an `AgentSpec` to run an agent.
+ *
+ * Quick start:
+ *   import { Agent } from "@agentic/runner";
+ *   import { defaultRegistry } from "@agentic/tools";
+ *
+ *   const result = await new Agent({
+ *     model: "claude-sonnet-4-6",
+ *     cwd: process.cwd(),
+ *     timeout: 300,
+ *     toolRegistry: defaultRegistry,
+ *   }).run("Summarize the codebase.");
  */
 
-// ── Core loop ─────────────────────────────────────────────────────────────────
+// ── Agent class (high-level API) ──────────────────────────────────────────────
+export { Agent } from "./agent.js";
+export type { AgentConfig } from "./agent.js";
+
+// ── Core loop (low-level API) ─────────────────────────────────────────────────
 export { runAgent } from "./agent-loop.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,7 +48,15 @@ export type { HookEvent, HookEventType, HookHandler } from "./hooks.js";
 export { LoopDetector } from "./loop-detector.js";
 export type { LoopDetectionResult } from "./loop-detector.js";
 
-// ── Context management ────────────────────────────────────────────────────────
+// ── Context engine (pluggable) ────────────────────────────────────────────────
+export {
+  TruncatingContextEngine,
+  NoopContextEngine,
+  defaultContextEngine,
+} from "./context-engine.js";
+export type { ContextEngine } from "./context-engine.js";
+
+// ── Context management (low-level helpers) ────────────────────────────────────
 export {
   getContextLimit,
   estimateTokens,

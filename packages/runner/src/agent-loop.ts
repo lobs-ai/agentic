@@ -25,7 +25,8 @@ import {
 import { getToolDefinitions, executeTool } from "./tool-registry.js";
 import { getHookRegistry } from "./hooks.js";
 import { LoopDetector } from "./loop-detector.js";
-import { shouldCompact, compactMessages, estimateTokens } from "./context-manager.js";
+import { estimateTokens } from "./context-manager.js";
+import { defaultContextEngine } from "./context-engine.js";
 import { SessionTranscript } from "./session-transcript.js";
 
 export type { AgentSpec, AgentResult };
@@ -66,9 +67,12 @@ function isTransientError(message: string): boolean {
  * max turns.
  */
 export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
-  const { task, agent, model, cwd, timeout } = spec;
+  const { task, agent, model, timeout } = spec;
+  let cwd = spec.cwd;
   const maxTurns = spec.maxTurns ?? DEFAULT_MAX_TURNS;
   const maxTokens = spec.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const contextEngine = spec.contextEngine ?? defaultContextEngine;
+  const registry = spec.toolRegistry;
 
   // ── IDs ───────────────────────────────────────────────────────────────────
   const runId = randomBytes(8).toString("hex");
@@ -96,7 +100,9 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
     buildDefaultSystemPrompt(agent, spec.context?.notes);
 
   // ── Tool definitions ──────────────────────────────────────────────────────
-  const toolDefs = getToolDefinitions(spec.tools);
+  const toolDefs = registry
+    ? registry.getDefinitions(spec.tools)
+    : getToolDefinitions(spec.tools);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const messages: LLMMessage[] = spec.initialMessages ?? [
@@ -146,8 +152,8 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
       turns++;
 
       // ── Context compaction ──────────────────────────────────────────────
-      if (turns > 1 && shouldCompact(messages, model)) {
-        const compacted = compactMessages(messages);
+      if (turns > 1 && contextEngine.shouldCompact(messages, model)) {
+        const compacted = contextEngine.compact(messages);
         messages.length = 0;
         messages.push(...compacted);
 
@@ -298,12 +304,25 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
           // Execute with timeout
           let result: ToolResult;
           try {
-            const executePromise = spec.toolExecutor
-              ? spec.toolExecutor(toolName, toolInput, toolUseId, cwd, {
-                  channelId: spec.context?.channelId,
-                  toolUseId,
-                })
-              : executeTool(toolName, toolInput, toolUseId, cwd);
+            let executePromise: Promise<ToolResult>;
+
+            if (spec.toolExecutor) {
+              executePromise = spec.toolExecutor(toolName, toolInput, toolUseId, cwd, {
+                channelId: spec.context?.channelId,
+                toolUseId,
+              });
+            } else if (registry) {
+              executePromise = registry.execute(toolName, toolInput, cwd).then((raw) => {
+                const content = typeof raw === "string" ? raw : raw.result;
+                // Propagate cwd changes from exec tool's sideEffects
+                if (typeof raw !== "string" && raw.sideEffects?.newCwd) {
+                  cwd = raw.sideEffects.newCwd;
+                }
+                return { toolUseId, content };
+              });
+            } else {
+              executePromise = executeTool(toolName, toolInput, toolUseId, cwd);
+            }
 
             result = await Promise.race([
               executePromise,

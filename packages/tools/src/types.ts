@@ -6,7 +6,8 @@
 export interface ToolDefinition {
   name: string;
   description: string;
-  input_schema: Record<string, unknown>;
+  /** JSON Schema object descriptor. Must include `type: "object"`. */
+  input_schema: { type: "object"; [key: string]: unknown };
 }
 
 /** Result from a tool executor — either a plain string or a structured result with optional side effects */

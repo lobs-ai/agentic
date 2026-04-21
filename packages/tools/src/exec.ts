@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ToolDefinition, ToolExecutorResult } from "./types.js";
 import { capOutput } from "./output-cap.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 
 // ── Tool Definition ──────────────────────────────────────────────────────────
 
@@ -219,4 +220,16 @@ export async function execTool(
     return { result: output, sideEffects: { newCwd } };
   }
   return output;
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class ExecTool extends BaseTool {
+  readonly name = "exec";
+  readonly description = execToolDefinition.description;
+  readonly inputSchema = execToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext): Promise<ToolExecutorResult> {
+    return execTool(params, ctx.cwd);
+  }
 }

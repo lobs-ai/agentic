@@ -5,6 +5,8 @@
  */
 
 import type { LLMClient, LLMMessage, ToolDefinition } from "@agentic/llm";
+import type { ToolRegistry } from "@agentic/tools";
+import type { ContextEngine } from "./context-engine.js";
 
 // ── Agent Spec ────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,19 @@ export interface AgentSpec {
   sanitizeResponseContent?: (
     content: import("@agentic/llm").ContentBlock[],
   ) => import("@agentic/llm").ContentBlock[];
+
+  /**
+   * Tool registry to use for this run. When provided, `tools` names are
+   * resolved against this registry. Falls back to the module-level registry
+   * when omitted.
+   */
+  toolRegistry?: ToolRegistry;
+
+  /**
+   * Context engine for managing the conversation window. When omitted the
+   * default `TruncatingContextEngine` is used (80% threshold, 5 recent turns).
+   */
+  contextEngine?: ContextEngine;
 }
 
 // ── Tool Executor ─────────────────────────────────────────────────────────────

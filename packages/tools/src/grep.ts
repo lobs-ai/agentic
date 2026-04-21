@@ -8,6 +8,7 @@
 import { spawn } from "node:child_process";
 import type { ToolDefinition } from "./types.js";
 import { capOutput } from "./output-cap.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 import { resolveToCwd } from "./path-utils.js";
 
 // ── Tool Definition ──────────────────────────────────────────────────────────
@@ -194,4 +195,16 @@ export async function grepTool(
       resolvePromise(capOutput(truncated));
     });
   });
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class GrepTool extends BaseTool {
+  readonly name = "grep";
+  readonly description = grepToolDefinition.description;
+  readonly inputSchema = grepToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return grepTool(params, ctx.cwd);
+  }
 }

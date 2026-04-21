@@ -8,6 +8,7 @@
 import { readdirSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import type { ToolDefinition } from "./types.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 import { capOutput } from "./output-cap.js";
 import { resolveToCwd } from "./path-utils.js";
 
@@ -106,4 +107,16 @@ export async function lsTool(
   }
 
   return capOutput(lines.join("\n"));
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class LsTool extends BaseTool {
+  readonly name = "ls";
+  readonly description = lsToolDefinition.description;
+  readonly inputSchema = lsToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return lsTool(params, ctx.cwd);
+  }
 }

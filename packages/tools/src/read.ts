@@ -8,6 +8,7 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import type { ToolDefinition } from "./types.js";
 import { resolveToCwd } from "./path-utils.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 
 // ── Tool Definition ──────────────────────────────────────────────────────────
 
@@ -157,4 +158,16 @@ export async function readTool(
   const safe = lastNewline > 0 ? truncated.slice(0, lastNewline) : truncated;
   const shown = safe.split("\n").length;
   return safe + `\n\n[Truncated. Shown ${shown}/${slice.length} lines. Use offset/limit for more.]`;
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class ReadTool extends BaseTool {
+  readonly name = "read";
+  readonly description = readToolDefinition.description;
+  readonly inputSchema = readToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return readTool(params, ctx.cwd);
+  }
 }

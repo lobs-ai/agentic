@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import type { ToolDefinition } from "./types.js";
 import { capOutput } from "./output-cap.js";
 import { resolveToCwd } from "./path-utils.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 
 // ── Tool Definition ──────────────────────────────────────────────────────────
 
@@ -146,4 +147,16 @@ export async function globTool(
       resolvePromise(header + capOutput(relativized));
     });
   });
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class GlobTool extends BaseTool {
+  readonly name = "glob";
+  readonly description = globToolDefinition.description;
+  readonly inputSchema = globToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return globTool(params, ctx.cwd);
+  }
 }

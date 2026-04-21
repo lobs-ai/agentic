@@ -1,7 +1,9 @@
 /**
  * Client Factory
  *
- * `parseModelString()` — splits "provider/model-id" strings into a ProviderConfig.
+ * `inferProvider()`   — infers a provider from a bare model ID (e.g. "claude-sonnet-4-6").
+ * `parseModelString()` — splits "provider/model-id" strings into a ProviderConfig,
+ *                        or auto-infers the provider when no prefix is given.
  * `createClient()`    — builds a bare LLMClient for a model string.
  *
  * For production use with retries/fallbacks, prefer `createResilientClient()`
@@ -22,58 +24,102 @@ import type {
   ClientConfig,
 } from "./types.js";
 
-// ── parseModelString ──────────────────────────────────────────────────────────
+// ── inferProvider ─────────────────────────────────────────────────────────────
 
 /**
- * Parse a "provider/model-id" string into a structured `ProviderConfig`.
+ * Well-known model-name prefixes and their canonical providers.
+ * Checked in order; first match wins. Case-insensitive.
+ */
+const MODEL_PROVIDER_PREFIXES: Array<[string, Provider]> = [
+  ["claude", "anthropic"],
+  ["codex-", "openai-codex"],
+  ["gpt-", "openai"],
+  ["o1-", "openai"],
+  ["o1", "openai"],
+  ["o3-", "openai"],
+  ["o3", "openai"],
+  ["o4-", "openai"],
+  ["o4", "openai"],
+  ["text-davinci", "openai"],
+];
+
+/**
+ * Infer a provider from a bare model ID such as `"claude-sonnet-4-6"` or
+ * `"gpt-4o"`. Returns `null` when no prefix matches.
  *
- * The provider prefix is case-insensitive and must be one of the known
- * provider names. The model ID is everything after the first slash.
+ * Use `parseModelString` if you want automatic fallback with an error on
+ * unknown model IDs.
+ */
+export function inferProvider(model: string): Provider | null {
+  const lower = model.toLowerCase();
+  for (const [prefix, provider] of MODEL_PROVIDER_PREFIXES) {
+    if (lower.startsWith(prefix)) return provider;
+  }
+  return null;
+}
+
+// ── parseModelString ──────────────────────────────────────────────────────────
+
+const KNOWN_PROVIDERS: Provider[] = [
+  "anthropic",
+  "openai",
+  "openai-codex",
+  "lmstudio",
+  "openrouter",
+  "openai-compatible",
+  "opencode-zen",
+  "opencode-go",
+  "z-ai",
+  "minimax",
+  "kimi",
+];
+
+/**
+ * Parse a model string into a structured `ProviderConfig`.
+ *
+ * Accepts two formats:
+ * - `"provider/model-id"` — explicit provider prefix (e.g. `"anthropic/claude-sonnet-4-6"`)
+ * - `"model-id"` — bare model ID; provider is inferred from the name prefix
+ *   (e.g. `"claude-sonnet-4-6"` → `anthropic`, `"gpt-4o"` → `openai`)
  *
  * @example
  * ```ts
+ * parseModelString("claude-sonnet-4-6")
+ * // → { provider: "anthropic", modelId: "claude-sonnet-4-6" }
+ *
  * parseModelString("anthropic/claude-sonnet-4-20250514")
  * // → { provider: "anthropic", modelId: "claude-sonnet-4-20250514" }
  *
  * parseModelString("openrouter/anthropic/claude-sonnet-4")
  * // → { provider: "openrouter", modelId: "anthropic/claude-sonnet-4" }
- *
- * parseModelString("lmstudio/my-local-model")
- * // → { provider: "lmstudio", modelId: "my-local-model" }
  * ```
  *
- * @throws if the string has no "/" or the provider is not recognised.
+ * @throws if the provider cannot be inferred or is not recognised.
  */
 export function parseModelString(model: string): ProviderConfig {
   const slashIdx = model.indexOf("/");
+
   if (slashIdx === -1) {
+    // No slash — try to infer provider from the model name
+    const inferred = inferProvider(model);
+    if (inferred) {
+      return { provider: inferred, modelId: model };
+    }
     throw new Error(
-      `Invalid model string "${model}": must be "provider/model-id". ` +
-        `Example: "anthropic/claude-sonnet-4-20250514"`,
+      `Cannot infer provider for model "${model}". ` +
+        `Use "provider/model-id" format or a well-known model name ` +
+        `(e.g. "claude-sonnet-4-6", "gpt-4o"). ` +
+        `Known providers: ${KNOWN_PROVIDERS.join(", ")}`,
     );
   }
 
   const providerRaw = model.slice(0, slashIdx).toLowerCase();
   const modelId = model.slice(slashIdx + 1);
 
-  const knownProviders: Provider[] = [
-    "anthropic",
-    "openai",
-    "openai-codex",
-    "lmstudio",
-    "openrouter",
-    "openai-compatible",
-    "opencode-zen",
-    "opencode-go",
-    "z-ai",
-    "minimax",
-    "kimi",
-  ];
-
-  if (!knownProviders.includes(providerRaw as Provider)) {
+  if (!KNOWN_PROVIDERS.includes(providerRaw as Provider)) {
     throw new Error(
       `Unknown provider "${providerRaw}" in model string "${model}". ` +
-        `Known providers: ${knownProviders.join(", ")}`,
+        `Known providers: ${KNOWN_PROVIDERS.join(", ")}`,
     );
   }
 

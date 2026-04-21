@@ -29,7 +29,7 @@
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 
-export { createClient, parseModelString, KNOWN_ENDPOINTS } from "./client.js";
+export { createClient, parseModelString, inferProvider, KNOWN_ENDPOINTS } from "./client.js";
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 

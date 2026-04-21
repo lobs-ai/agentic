@@ -8,6 +8,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 import type { ToolDefinition } from "./types.js";
 import { resolveToCwd } from "./path-utils.js";
 import { hasRecentlyReadFile, getReadSnapshot, createReadSnapshot, updateReadSnapshot } from "./read.js";
@@ -217,3 +218,15 @@ export async function editTool(
 
 // Re-export snapshot helpers (needed by write.ts)
 export { createReadSnapshot };
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class EditTool extends BaseTool {
+  readonly name = "edit";
+  readonly description = editToolDefinition.description;
+  readonly inputSchema = editToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return editTool(params, ctx.cwd);
+  }
+}

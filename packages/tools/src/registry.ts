@@ -1,0 +1,94 @@
+/**
+ * ToolRegistry — typed, fluent registry for tool instances.
+ *
+ * Accepts both `BaseTool` subclass instances and raw `ToolEntry` objects
+ * so you can mix class-based and legacy tools in the same registry.
+ *
+ * @example
+ * ```ts
+ * import { ToolRegistry } from "@agentic/tools";
+ *
+ * const registry = new ToolRegistry()
+ *   .register(new MyCustomTool())
+ *   .registerAll(builtinTools);
+ *
+ * // Pass to the agent loop
+ * await runAgent({ ..., toolRegistry: registry });
+ * ```
+ */
+
+import type { ToolDefinition, ToolEntry } from "./types.js";
+import type { BaseTool } from "./base-tool.js";
+
+function isBaseTool(t: BaseTool | ToolEntry): t is BaseTool {
+  return typeof (t as BaseTool).run === "function";
+}
+
+export class ToolRegistry {
+  private readonly _tools = new Map<string, ToolEntry>();
+
+  /**
+   * Register a single tool.
+   * Accepts a `BaseTool` instance or a raw `{ definition, executor }` entry.
+   * Returns `this` for chaining.
+   */
+  register(tool: BaseTool | ToolEntry): this {
+    const entry = isBaseTool(tool) ? tool.toEntry() : tool;
+    this._tools.set(entry.definition.name, entry);
+    return this;
+  }
+
+  /**
+   * Register multiple tools at once.
+   * Returns `this` for chaining.
+   */
+  registerAll(tools: Array<BaseTool | ToolEntry>): this {
+    for (const t of tools) this.register(t);
+    return this;
+  }
+
+  /**
+   * Return tool definitions for the given names (or all registered tools
+   * when `names` is omitted).
+   */
+  getDefinitions(names?: string[]): ToolDefinition[] {
+    if (!names || names.length === 0) {
+      return Array.from(this._tools.values()).map((t) => t.definition);
+    }
+    const defs: ToolDefinition[] = [];
+    for (const name of names) {
+      const entry = this._tools.get(name);
+      if (entry) defs.push(entry.definition);
+    }
+    return defs;
+  }
+
+  /**
+   * Execute a tool by name.
+   * Throws if the tool is not found.
+   */
+  execute(
+    name: string,
+    params: Record<string, unknown>,
+    cwd: string,
+  ) {
+    const entry = this._tools.get(name);
+    if (!entry) throw new Error(`Unknown tool: "${name}"`);
+    return entry.executor(params, cwd);
+  }
+
+  /** Return true if a tool with the given name is registered. */
+  has(name: string): boolean {
+    return this._tools.has(name);
+  }
+
+  /** Return all registered tool names. */
+  names(): string[] {
+    return Array.from(this._tools.keys());
+  }
+
+  /** Number of registered tools. */
+  get size(): number {
+    return this._tools.size;
+  }
+}

@@ -8,6 +8,7 @@
 import { spawn } from "node:child_process";
 import type { ToolDefinition } from "./types.js";
 import { capOutput } from "./output-cap.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 import { resolveToCwd } from "./path-utils.js";
 
 // ── Tool Definition ──────────────────────────────────────────────────────────
@@ -189,4 +190,16 @@ export async function codeSearchTool(
       resolvePromise(capOutput(result));
     });
   });
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class CodeSearchTool extends BaseTool {
+  readonly name = "code-search";
+  readonly description = codeSearchToolDefinition.description;
+  readonly inputSchema = codeSearchToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return codeSearchTool(params, ctx.cwd);
+  }
 }

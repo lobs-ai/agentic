@@ -8,6 +8,7 @@
 import { existsSync, statSync } from "node:fs";
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 import type { ToolDefinition } from "./types.js";
 import { resolveToCwd } from "./path-utils.js";
 import { hasRecentlyReadFile, updateReadSnapshot } from "./read.js";
@@ -70,4 +71,16 @@ export async function writeTool(
   updateReadSnapshot(resolved);
 
   return `File written: ${resolved} (${content.length} chars)`;
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class WriteTool extends BaseTool {
+  readonly name = "write";
+  readonly description = writeToolDefinition.description;
+  readonly inputSchema = writeToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return writeTool(params, ctx.cwd);
+  }
 }

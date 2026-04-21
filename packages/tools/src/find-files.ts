@@ -8,6 +8,7 @@
 
 import { spawn } from "node:child_process";
 import type { ToolDefinition } from "./types.js";
+import { BaseTool, type ToolContext } from "./base-tool.js";
 import { capOutput } from "./output-cap.js";
 import { resolveToCwd } from "./path-utils.js";
 
@@ -156,4 +157,16 @@ export async function findFilesTool(
       resolvePromise(`Found ${matchCount} result${matchCount === 1 ? "" : "s"}:\n` + capOutput(result));
     });
   });
+}
+
+// ── Class-based API ───────────────────────────────────────────────────────────
+
+export class FindFilesTool extends BaseTool {
+  readonly name = "find-files";
+  readonly description = findFilesToolDefinition.description;
+  readonly inputSchema = findFilesToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
+
+  run(params: Record<string, unknown>, ctx: ToolContext) {
+    return findFilesTool(params, ctx.cwd);
+  }
 }
