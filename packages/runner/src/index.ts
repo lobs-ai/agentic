@@ -21,6 +21,7 @@ export type { AgentConfig } from "./agent.js";
 
 // ── Session ───────────────────────────────────────────────────────────────────
 export { Session } from "./session.js";
+export type { SessionStore } from "./session.js";
 
 // ── Core loop (low-level API) ─────────────────────────────────────────────────
 export { runAgent } from "./agent-loop.js";

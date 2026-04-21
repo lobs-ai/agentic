@@ -324,7 +324,7 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
                 toolUseId,
               });
             } else if (registry) {
-              executePromise = registry.execute(toolName, toolInput, cwd).then((raw) => {
+              executePromise = registry.execute(toolName, toolInput, cwd, spec.context as Record<string, unknown> | undefined).then((raw) => {
                 const content = typeof raw === "string" ? raw : raw.result;
                 // Propagate cwd changes from exec tool's sideEffects
                 if (typeof raw !== "string" && raw.sideEffects?.newCwd) {

@@ -30,6 +30,21 @@ import type { ToolDefinition, ToolExecutorResult } from "./types.js";
 export interface ToolContext {
   /** The working directory of the agent at call time. */
   cwd: string;
+  /**
+   * Arbitrary metadata from the calling agent — e.g. userId, sessionId,
+   * channelId, or any application-specific context the tool needs.
+   *
+   * Populated from `AgentSpec.context` when running through `AgenticRuntime`.
+   *
+   * @example
+   * ```ts
+   * run(input, ctx) {
+   *   const userId = ctx.meta?.userId as string;
+   *   const sessionId = ctx.meta?.sessionId as string;
+   * }
+   * ```
+   */
+  meta?: Record<string, unknown>;
 }
 
 /** Input schema — JSON Schema object descriptor for the tool's input. */
@@ -76,8 +91,8 @@ export abstract class BaseTool<
   toEntry() {
     return {
       definition: this.definition,
-      executor: (params: Record<string, unknown>, cwd: string) =>
-        this.run(params as TInput, { cwd }),
+      executor: (params: Record<string, unknown>, cwd: string, meta?: Record<string, unknown>) =>
+        this.run(params as TInput, { cwd, meta }),
     };
   }
 }

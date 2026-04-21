@@ -65,16 +65,24 @@ export class ToolRegistry {
 
   /**
    * Execute a tool by name.
-   * Throws if the tool is not found.
+   *
+   * @param name   Registered tool name.
+   * @param params Tool input parameters.
+   * @param cwd    Working directory for file/exec operations.
+   * @param meta   Optional agent context (userId, sessionId, etc.) passed
+   *               through to `ToolContext.meta` inside the tool's `run()`.
+   *
+   * @throws When the tool name is not registered.
    */
   execute(
     name: string,
     params: Record<string, unknown>,
     cwd: string,
+    meta?: Record<string, unknown>,
   ) {
     const entry = this._tools.get(name);
     if (!entry) throw new Error(`Unknown tool: "${name}"`);
-    return entry.executor(params, cwd);
+    return entry.executor(params, cwd, meta);
   }
 
   /** Return true if a tool with the given name is registered. */

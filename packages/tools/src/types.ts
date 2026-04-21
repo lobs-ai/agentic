@@ -40,6 +40,7 @@ export interface ToolSideEffects {
 export type ToolExecutor = (
   params: Record<string, unknown>,
   cwd: string,
+  meta?: Record<string, unknown>,
 ) => Promise<ToolExecutorResult>;
 
 /** A registered tool entry */

@@ -67,6 +67,9 @@ export { discoverTools, loadToolFile } from "./discover.js";
 export { createContextEngine } from "./context-factory.js";
 export { buildCustomClient } from "./provider-factory.js";
 export { loadConfigFile, findConfigFile, parseConfigFile } from "./config-loader.js";
+export { PromptBuilder } from "./prompt-builder.js";
+export { parseJsonOutput, extract } from "./output.js";
+export type { ExtractOptions } from "./output.js";
 
 // ── Re-export the full sub-package APIs ───────────────────────────────────────
 // Users can do `import { BaseTool, Agent, createClient } from "agentic"`
@@ -138,6 +141,7 @@ export type {
   LoopDetectionResult,
   TurnRecord,
   SessionSummary,
+  SessionStore,
 } from "@agentic/runner";
 
 // @agentic/llm

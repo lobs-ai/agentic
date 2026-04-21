@@ -42,6 +42,7 @@
 import {
   createResilientClient,
   configureKeyManager,
+  parseModelString,
   type LLMClient,
   type KeyManagerConfig,
 } from "@agentic/llm";
@@ -61,6 +62,7 @@ import { discoverTools, loadToolFile } from "./discover.js";
 import { createContextEngine } from "./context-factory.js";
 import { buildCustomClient } from "./provider-factory.js";
 import { loadConfigFile } from "./config-loader.js";
+import { extract as extractUtil, type ExtractOptions } from "./output.js";
 import type {
   AgenticConfig,
   AgentDefaults,
@@ -363,5 +365,133 @@ export class AgenticRuntime {
     };
 
     return new Agent(merged);
+  }
+
+  // ── Single-turn calls ────────────────────────────────────────────────────────
+
+  /**
+   * Make a single LLM call and return the text response.
+   *
+   * No agent loop, no tools — just a direct completion. Useful for
+   * classification, rewriting, summarisation, and other single-step tasks.
+   *
+   * @example
+   * ```ts
+   * const summary = await runtime.ask(
+   *   "Summarize this in one sentence: " + longText,
+   *   { model: "claude-haiku-4-5" },
+   * );
+   * ```
+   */
+  async ask(
+    prompt: string,
+    opts: {
+      model?: string;
+      system?: string;
+      maxTokens?: number;
+    } = {},
+  ): Promise<string> {
+    const model = opts.model ?? this._defaults.model;
+    if (!model) {
+      throw new Error(
+        "[agentic] No model specified. Pass model to ask() or set defaults.model in config.",
+      );
+    }
+    const client = this.resolveClient(model);
+    const { modelId } = parseModelString(model);
+    const response = await client.createMessage({
+      model: modelId,
+      system: opts.system ?? "",
+      messages: [{ role: "user", content: prompt }],
+      tools: [],
+      maxTokens: opts.maxTokens ?? 4096,
+    });
+    const textBlock = response.content.find((b) => b.type === "text");
+    return textBlock?.type === "text" ? textBlock.text : "";
+  }
+
+  /**
+   * Make a single LLM call and return a parsed, optionally validated JSON result.
+   *
+   * Retries automatically when the model returns unparseable output — each
+   * retry shows the model what went wrong so it can self-correct.
+   *
+   * Pass a `validate` function to enforce a schema (Zod, manual, etc.).
+   *
+   * @example With Zod validation
+   * ```ts
+   * const plan = await runtime.extract(
+   *   "Extract a task list from: " + taskText,
+   *   {
+   *     model: "claude-haiku-4-5",
+   *     validate: (d) => TaskListSchema.parse(d),
+   *   },
+   * );
+   * ```
+   *
+   * @example Without validation
+   * ```ts
+   * const data = await runtime.extract<{ name: string; age: number }>(
+   *   "Extract name and age from: John Smith, 30 years old",
+   * );
+   * ```
+   */
+  async extract<T = unknown>(
+    prompt: string,
+    opts: ExtractOptions<T> & { model?: string } = {},
+  ): Promise<T> {
+    const model = opts.model ?? this._defaults.model;
+    if (!model) {
+      throw new Error(
+        "[agentic] No model specified. Pass model to extract() or set defaults.model in config.",
+      );
+    }
+    const client = this.resolveClient(model);
+    return extractUtil(client, model, prompt, opts);
+  }
+
+  // ── Named agents ─────────────────────────────────────────────────────────────
+
+  /**
+   * Define a reusable named agent with a fixed configuration.
+   *
+   * Returns a factory function: call it to create a fresh `Agent` instance
+   * with the stored defaults. Per-run overrides are still possible via
+   * `agent.run(task, overrides)`.
+   *
+   * Both apps have multiple "roles" (Planner, Monitor, Chat; or onboarding,
+   * signal, setup). `defineAgent` is the clean way to capture those.
+   *
+   * @example
+   * ```ts
+   * const chatAgent = runtime.defineAgent({
+   *   name: "chat",
+   *   model: "claude-sonnet-4-6",
+   *   systemPrompt: "You are a helpful study assistant.",
+   *   tools: ["read", "grep"],
+   * });
+   *
+   * const plannerAgent = runtime.defineAgent({
+   *   name: "planner",
+   *   model: "claude-opus-4-7",
+   *   systemPrompt: "You are a structured planning assistant. Respond with JSON.",
+   *   tools: [],
+   * });
+   *
+   * // Use them anywhere:
+   * const result = await chatAgent().run("Explain recursion.");
+   * const plan = await plannerAgent().run("Plan my week.");
+   * ```
+   */
+  defineAgent(
+    config: Partial<AgentConfig> & {
+      model?: string;
+      cwd?: string;
+      timeout?: number;
+      /** Human-readable name for logging / identification. */
+      name?: string;
+    },
+  ): () => Agent {
+    return () => this.agent({ agent: config.name ?? "agent", ...config });
   }
 }
