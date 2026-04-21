@@ -1,0 +1,38 @@
+{
+  "name": "@agentic/discord",
+  "version": "0.1.0",
+  "description": "Discord bot integration for AgenticRuntime — connect discord.js to an agentic agent with per-channel sessions",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "agentic": "^0.1.0",
+    "@agentic/runner": "^0.1.0",
+    "@agentic/llm": "^0.1.0",
+    "@agentic/tools": "^0.1.0",
+    "discord.js": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "agentic": "^0.1.0"
+  }
+}

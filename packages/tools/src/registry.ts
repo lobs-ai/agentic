@@ -81,7 +81,7 @@ export class ToolRegistry {
     meta?: Record<string, unknown>,
   ) {
     const entry = this._tools.get(name);
-    if (!entry) throw new Error(`Unknown tool: "${name}"`);
+    if (!entry) return Promise.reject(new Error(`Unknown tool: "${name}"`));
     return entry.executor(params, cwd, meta);
   }
 

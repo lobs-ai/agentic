@@ -105,6 +105,7 @@ function extractCwdMarker(stdout: string): { cleaned: string; detectedCwd: strin
 export async function execTool(
   params: Record<string, unknown>,
   defaultCwd: string,
+  injectedSecrets: Record<string, string> = {},
 ): Promise<ToolExecutorResult> {
   const command = (params.cmd as string) ?? (params.command as string);
   if (!command || typeof command !== "string") {
@@ -119,7 +120,8 @@ export async function execTool(
     params.env && typeof params.env === "object"
       ? (params.env as Record<string, string>)
       : {};
-  const env = { ...process.env, ...extraEnv };
+  // injectedSecrets < extraEnv (params.env wins — LLM can always override)
+  const env = { ...process.env, ...injectedSecrets, ...extraEnv };
 
   // Handle bare cd as a pure cwd change (no subprocess needed)
   const cdTarget = parseBarecd(command);
@@ -224,13 +226,38 @@ export async function execTool(
 
 // ── Class-based API ───────────────────────────────────────────────────────────
 
+export interface ExecToolOptions {
+  /**
+   * Static secrets injected into every subprocess environment.
+   * Resolved once at construction time from env vars or a secrets store.
+   *
+   * Per-call secrets in `ToolContext.secrets` are merged on top of these,
+   * and `params.env` (LLM-supplied) wins over both.
+   *
+   * @example
+   * ```ts
+   * new ExecTool({ secrets: { GH_TOKEN: process.env.GH_TOKEN ?? "" } })
+   * ```
+   */
+  secrets?: Record<string, string>;
+}
+
 export class ExecTool extends BaseTool {
   readonly name = "exec";
   readonly tags = ["exec", "shell"] as const;
   readonly description = execToolDefinition.description;
   readonly inputSchema = execToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 
+  private readonly _staticSecrets: Record<string, string>;
+
+  constructor({ secrets = {} }: ExecToolOptions = {}) {
+    super();
+    this._staticSecrets = secrets;
+  }
+
   run(params: Record<string, unknown>, ctx: ToolContext): Promise<ToolExecutorResult> {
-    return execTool(params, ctx.cwd);
+    // static constructor secrets < per-call ctx.secrets (caller wins over defaults)
+    const injected = { ...this._staticSecrets, ...ctx.secrets };
+    return execTool(params, ctx.cwd, injected);
   }
 }

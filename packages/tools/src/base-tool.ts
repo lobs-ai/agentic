@@ -45,6 +45,24 @@ export interface ToolContext {
    * ```
    */
   meta?: Record<string, unknown>;
+  /**
+   * Secrets to inject into subprocess environments.
+   * Keys are env var names; values are the resolved secret strings.
+   *
+   * Used by ExecTool to forward credentials (e.g. GH_TOKEN) without
+   * exposing them in the tool's `params.env` input visible to the LLM.
+   *
+   * Populated from `meta.secrets` when routing through `toEntry()`, or
+   * set directly on the context by the caller.
+   *
+   * @example
+   * ```ts
+   * registry.execute("exec", { cmd: "gh pr list" }, cwd, {
+   *   secrets: { GH_TOKEN: process.env.GH_TOKEN },
+   * });
+   * ```
+   */
+  secrets?: Record<string, string>;
 }
 
 /** Input schema — JSON Schema object descriptor for the tool's input. */
@@ -91,8 +109,10 @@ export abstract class BaseTool<
   toEntry() {
     return {
       definition: this.definition,
-      executor: (params: Record<string, unknown>, cwd: string, meta?: Record<string, unknown>) =>
-        this.run(params as TInput, { cwd, meta }),
+      executor: (params: Record<string, unknown>, cwd: string, meta?: Record<string, unknown>) => {
+        const secrets = meta?.secrets as Record<string, string> | undefined;
+        return this.run(params as TInput, { cwd, meta, secrets });
+      },
     };
   }
 }

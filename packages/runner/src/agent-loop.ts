@@ -215,6 +215,9 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
         return finish(false, "", "llm_error", error.message);
       }
 
+      // Timeout may have fired while awaiting the LLM call
+      if (timedOut) break;
+
       // ── Usage accounting ────────────────────────────────────────────────
       totalUsage = {
         inputTokens: totalUsage.inputTokens + response.usage.inputTokens,
@@ -434,7 +437,7 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
     const reason = timedOut ? "timeout" : "max_turns";
     const errorMsg =
       reason === "timeout"
-        ? `Agent timed out after ${timeout}s`
+        ? `Agent timeout exceeded (${timeout}s)`
         : `Max turns (${maxTurns}) exceeded`;
 
     await hooks.emit("after_agent_end", {

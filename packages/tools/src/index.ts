@@ -29,7 +29,7 @@ export type {
 } from "./types.js";
 
 // ── Utilities ────────────────────────────────────────────────────────────────
-export { capOutput } from "./output-cap.js";
+export { capOutput, DEFAULT_OUTPUT_CAP, DEFAULT_MAX_LINES } from "./output-cap.js";
 export { resolveToCwd } from "./path-utils.js";
 
 // ── Read snapshot helpers ─────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ export const ALL_TOOLS: ToolEntry[] = [
   { definition: readToolDefinition, executor: readTool },
   { definition: writeToolDefinition, executor: writeTool },
   { definition: editToolDefinition, executor: editTool },
-  { definition: execToolDefinition, executor: execTool },
+  { definition: execToolDefinition, executor: (params, cwd) => execTool(params, cwd) },
   { definition: lsToolDefinition, executor: lsTool },
   { definition: grepToolDefinition, executor: grepTool },
   { definition: globToolDefinition, executor: globTool },
