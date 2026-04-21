@@ -201,6 +201,7 @@ export async function grepTool(
 
 export class GrepTool extends BaseTool {
   readonly name = "grep";
+  readonly tags = ["filesystem", "readonly", "search"] as const;
   readonly description = grepToolDefinition.description;
   readonly inputSchema = grepToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

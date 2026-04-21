@@ -19,12 +19,46 @@ import { OpenAIClient } from "./openai.js";
 
 // ── Known Endpoints ───────────────────────────────────────────────────────────
 
-/** Well-known base URLs for popular OpenAI-compatible providers. */
+/**
+ * Well-known base URLs for OpenAI-compatible providers.
+ *
+ * Add an entry here to support a new provider without any other code changes.
+ * The key is the provider name used in "provider/model-id" strings.
+ */
 export const KNOWN_ENDPOINTS: Record<string, string> = {
+  // ── Cloud aggregators ──────────────────────────────────────────────────────
   openrouter: "https://openrouter.ai/api/v1",
+
+  // ── Frontier labs ──────────────────────────────────────────────────────────
+  deepseek: "https://api.deepseek.com/v1",
+  mistral: "https://api.mistral.ai/v1",
+  groq: "https://api.groq.com/openai/v1",
+  together: "https://api.together.xyz/v1",
+  xai: "https://api.x.ai/v1",
+  perplexity: "https://api.perplexity.ai",
+  fireworks: "https://api.fireworks.ai/inference/v1",
+  cerebras: "https://api.cerebras.ai/v1",
+  cohere: "https://api.cohere.ai/compatibility/v1",
+  sambanova: "https://api.sambanova.ai/v1",
+  novita: "https://api.novita.ai/v3/openai",
+  hyperbolic: "https://api.hyperbolic.xyz/v1",
+  lambda: "https://api.lambdalabs.com/v1",
+
+  // ── Google ─────────────────────────────────────────────────────────────────
+  // Gemini via the OpenAI-compatible endpoint (uses GOOGLE_API_KEY)
+  google: "https://generativelanguage.googleapis.com/v1beta/openai",
+
+  // ── Local / self-hosted ────────────────────────────────────────────────────
+  ollama: "http://localhost:11434/v1",
   lmstudio: "http://localhost:1234/v1",
+  llamacpp: "http://localhost:8080/v1",
+  vllm: "http://localhost:8000/v1",
+
+  // ── OpenCode subscriptions ─────────────────────────────────────────────────
   "opencode-zen": "https://opencode.ai/zen/v1",
   "opencode-go": "https://opencode.ai/zen/go/v1",
+
+  // ── Other ──────────────────────────────────────────────────────────────────
   "z-ai": "https://api.z.ai/api/paas/v4",
   minimax: "https://api.minimaxi.chat/v1",
   kimi: "https://api.moonshot.cn/v1",

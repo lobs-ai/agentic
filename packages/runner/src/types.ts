@@ -7,6 +7,7 @@
 import type { LLMClient, LLMMessage, ToolDefinition } from "@agentic/llm";
 import type { ToolRegistry } from "@agentic/tools";
 import type { ContextEngine } from "./context-engine.js";
+import type { Session } from "./session.js";
 
 // ── Agent Spec ────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,17 @@ export interface AgentSpec {
    * default `TruncatingContextEngine` is used (80% threshold, 5 recent turns).
    */
   contextEngine?: ContextEngine;
+
+  /**
+   * Shared session for message history.
+   *
+   * When provided, the loop reads from and writes to this session so the
+   * application can observe the conversation in real time. Replaces
+   * `initialMessages` — seed the session before the run instead.
+   *
+   * When omitted, the loop manages a private message array.
+   */
+  session?: Session;
 }
 
 // ── Tool Executor ─────────────────────────────────────────────────────────────

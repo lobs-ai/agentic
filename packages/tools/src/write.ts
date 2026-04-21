@@ -77,6 +77,7 @@ export async function writeTool(
 
 export class WriteTool extends BaseTool {
   readonly name = "write";
+  readonly tags = ["filesystem", "write"] as const;
   readonly description = writeToolDefinition.description;
   readonly inputSchema = writeToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

@@ -19,6 +19,9 @@
 export { Agent } from "./agent.js";
 export type { AgentConfig } from "./agent.js";
 
+// ── Session ───────────────────────────────────────────────────────────────────
+export { Session } from "./session.js";
+
 // ── Core loop (low-level API) ─────────────────────────────────────────────────
 export { runAgent } from "./agent-loop.js";
 

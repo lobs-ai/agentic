@@ -49,17 +49,27 @@ export abstract class BaseTool<
   abstract readonly description: string;
   /** JSON Schema for the tool's input parameters. */
   abstract readonly inputSchema: ToolInputSchema;
+  /**
+   * Optional semantic tags for runtime tool selection.
+   * Used by `ContextEngine.selectTools` and `registry.tagged()`.
+   * Not sent to the LLM.
+   *
+   * @example `["filesystem", "readonly"]`
+   */
+  readonly tags?: readonly string[];
 
   /** Execute the tool. Errors should be thrown — the registry catches them. */
   abstract run(input: TInput, context: ToolContext): Promise<ToolExecutorResult>;
 
-  /** Full `ToolDefinition` derived from name / description / inputSchema. */
+  /** Full `ToolDefinition` derived from name / description / inputSchema / tags. */
   get definition(): ToolDefinition {
-    return {
+    const def: ToolDefinition = {
       name: this.name,
       description: this.description,
       input_schema: this.inputSchema,
     };
+    if (this.tags) def.tags = this.tags;
+    return def;
   }
 
   /** Convert to a `ToolEntry` for use with `ToolRegistry` or legacy registries. */

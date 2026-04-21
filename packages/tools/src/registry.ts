@@ -87,6 +87,61 @@ export class ToolRegistry {
     return Array.from(this._tools.keys());
   }
 
+  /**
+   * Return the definition for a single tool, or `undefined` if not found.
+   *
+   * @example
+   * ```ts
+   * const def = registry.get("exec");
+   * console.log(def?.tags); // ["exec", "shell"]
+   * ```
+   */
+  get(name: string): ToolDefinition | undefined {
+    return this._tools.get(name)?.definition;
+  }
+
+  /**
+   * Return the names of all tools that satisfy `predicate`.
+   *
+   * @example Keep only readonly tools
+   * ```ts
+   * const safe = registry.filter(def => def.tags?.includes("readonly") ?? false);
+   * ```
+   *
+   * @example Exclude exec and write
+   * ```ts
+   * const restricted = registry.filter(
+   *   def => !def.tags?.some(t => ["exec", "write"].includes(t)),
+   * );
+   * ```
+   */
+  filter(predicate: (def: ToolDefinition) => boolean): string[] {
+    const names: string[] = [];
+    for (const [name, entry] of this._tools) {
+      if (predicate(entry.definition)) names.push(name);
+    }
+    return names;
+  }
+
+  /**
+   * Return the names of all tools that carry **at least one** of the given tags.
+   *
+   * Built-in tags: `"readonly"`, `"write"`, `"exec"`, `"filesystem"`,
+   * `"search"`, `"directory"`, `"shell"`.
+   *
+   * @example
+   * ```ts
+   * registry.tagged("readonly")           // all read-safe tools
+   * registry.tagged("write", "exec")      // write + exec tools combined
+   * ```
+   */
+  tagged(...tags: string[]): string[] {
+    const tagSet = new Set(tags);
+    return this.filter(
+      (def) => def.tags?.some((t) => tagSet.has(t)) ?? false,
+    );
+  }
+
   /** Number of registered tools. */
   get size(): number {
     return this._tools.size;

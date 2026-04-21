@@ -113,6 +113,7 @@ export async function lsTool(
 
 export class LsTool extends BaseTool {
   readonly name = "ls";
+  readonly tags = ["filesystem", "readonly", "directory"] as const;
   readonly description = lsToolDefinition.description;
   readonly inputSchema = lsToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

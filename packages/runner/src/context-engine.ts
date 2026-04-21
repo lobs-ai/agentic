@@ -13,6 +13,7 @@
  */
 
 import type { LLMMessage } from "@agentic/llm";
+import type { ToolRegistry } from "@agentic/tools";
 import {
   estimateTokens,
   shouldCompact,
@@ -35,6 +36,22 @@ export interface ContextEngine {
    * Must never break tool_use ↔ tool_result pairing.
    */
   compact(messages: LLMMessage[]): LLMMessage[];
+  /**
+   * Optional: choose which tools are available for the *next* LLM call.
+   *
+   * Called before every LLM turn, giving the context engine full visibility
+   * into the conversation so far. This is the hook for per-call dynamic tool
+   * selection — for example, restricting to read-only tools after a certain
+   * number of writes, or enabling a "done" tool once certain conditions are met.
+   *
+   * Return `undefined` to leave the tool set unchanged.
+   *
+   * @param messages Current conversation history (including any tool results
+   *   from the previous turn).
+   * @param registry The full tool registry — call `registry.names()` to
+   *   enumerate available tools.
+   */
+  selectTools?(messages: LLMMessage[], registry: ToolRegistry): string[] | undefined;
 }
 
 // ── TruncatingContextEngine ───────────────────────────────────────────────────

@@ -153,6 +153,7 @@ export async function globTool(
 
 export class GlobTool extends BaseTool {
   readonly name = "glob";
+  readonly tags = ["filesystem", "readonly", "search"] as const;
   readonly description = globToolDefinition.description;
   readonly inputSchema = globToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

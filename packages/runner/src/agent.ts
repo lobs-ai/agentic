@@ -38,6 +38,7 @@ import type {
   ToolExecutor,
 } from "./types.js";
 import type { ContextEngine } from "./context-engine.js";
+import type { Session } from "./session.js";
 import { runAgent } from "./agent-loop.js";
 
 // ── Config type ───────────────────────────────────────────────────────────────
@@ -75,6 +76,8 @@ export interface AgentConfig {
   context?: AgentContext;
   /** Progress callback. */
   onProgress?: (update: ProgressUpdate) => void;
+  /** Shared session for live message history access. */
+  session?: Session;
 }
 
 // ── Agent class ───────────────────────────────────────────────────────────────
@@ -123,6 +126,11 @@ export class Agent {
     return new Agent({ ...this.cfg, clientOverride });
   }
 
+  /** Return a new Agent bound to a shared session (for live message history access). */
+  withSession(session: Session): Agent {
+    return new Agent({ ...this.cfg, session });
+  }
+
   // ── Run ─────────────────────────────────────────────────────────────────────
 
   /**
@@ -147,6 +155,7 @@ export class Agent {
       toolExecutor: merged.toolExecutor,
       context: merged.context,
       onProgress: merged.onProgress,
+      session: merged.session,
     };
     return runAgent(spec);
   }

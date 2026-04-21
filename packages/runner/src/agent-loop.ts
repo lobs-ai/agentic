@@ -26,7 +26,8 @@ import { getToolDefinitions, executeTool } from "./tool-registry.js";
 import { getHookRegistry } from "./hooks.js";
 import { LoopDetector } from "./loop-detector.js";
 import { estimateTokens } from "./context-manager.js";
-import { defaultContextEngine } from "./context-engine.js";
+import { defaultContextEngine, type ContextEngine } from "./context-engine.js";
+import { Session } from "./session.js";
 import { SessionTranscript } from "./session-transcript.js";
 
 export type { AgentSpec, AgentResult };
@@ -71,7 +72,7 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
   let cwd = spec.cwd;
   const maxTurns = spec.maxTurns ?? DEFAULT_MAX_TURNS;
   const maxTokens = spec.maxTokens ?? DEFAULT_MAX_TOKENS;
-  const contextEngine = spec.contextEngine ?? defaultContextEngine;
+  const contextEngine: ContextEngine = spec.contextEngine ?? defaultContextEngine;
   const registry = spec.toolRegistry;
 
   // ── IDs ───────────────────────────────────────────────────────────────────
@@ -99,15 +100,13 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
     spec.systemPrompt ??
     buildDefaultSystemPrompt(agent, spec.context?.notes);
 
-  // ── Tool definitions ──────────────────────────────────────────────────────
-  const toolDefs = registry
-    ? registry.getDefinitions(spec.tools)
-    : getToolDefinitions(spec.tools);
-
-  // ── State ──────────────────────────────────────────────────────────────────
-  const messages: LLMMessage[] = spec.initialMessages ?? [
-    { role: "user", content: task },
-  ];
+  // ── Session / message history ─────────────────────────────────────────────
+  // Use spec.session if provided so the application can observe messages live.
+  // Fall back to a private Session seeded from initialMessages.
+  const session =
+    spec.session ??
+    new Session(spec.initialMessages ?? [{ role: "user", content: task }]);
+  const messages = session._ref();
   let totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   let totalCost = 0;
   let turns = 0;
@@ -165,6 +164,19 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
         });
       }
 
+      // ── Per-turn tool selection ─────────────────────────────────────────
+      // Context engine can vary tools each turn (e.g. restrict to read-only
+      // after N writes, or enable a "done" tool once a condition is met).
+      const activeTools = contextEngine.selectTools && registry
+        ? (contextEngine.selectTools(messages, registry) ?? spec.tools)
+        : spec.tools;
+      const toolDefs = registry
+        ? registry.getDefinitions(activeTools)
+        : getToolDefinitions(activeTools);
+
+      // Strip runtime-only `tags` — only send the LLM-contract fields
+      const toolDefsForLlm = toolDefs.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
+
       // ── beforeLlmCall hook ──────────────────────────────────────────────
       await hooks.emit("before_llm_call", {
         agentType: agent,
@@ -179,7 +191,7 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
         response = await llm.createMessage({
           system: systemPrompt,
           messages,
-          tools: toolDefs,
+          tools: toolDefsForLlm,
           model: parsed.modelId,
           maxTokens,
         });

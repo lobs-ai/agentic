@@ -8,6 +8,21 @@ export interface ToolDefinition {
   description: string;
   /** JSON Schema object descriptor. Must include `type: "object"`. */
   input_schema: { type: "object"; [key: string]: unknown };
+  /**
+   * Optional semantic tags for runtime tool selection.
+   *
+   * Built-in tags used by the provided tools:
+   * - `"readonly"` — does not modify any state
+   * - `"write"` — creates or modifies files
+   * - `"exec"` — runs shell commands
+   * - `"filesystem"` — operates on the local filesystem
+   * - `"search"` — finds or searches content
+   * - `"directory"` — works with directories
+   *
+   * Tags are stripped before being sent to the LLM — they are purely
+   * runtime metadata for `ContextEngine.selectTools` and `registry.tagged()`.
+   */
+  tags?: readonly string[];
 }
 
 /** Result from a tool executor — either a plain string or a structured result with optional side effects */

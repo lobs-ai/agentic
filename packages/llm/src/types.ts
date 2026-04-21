@@ -163,17 +163,49 @@ export interface LLMClient {
 
 /** Supported provider identifiers. */
 export type Provider =
+  // ── First-party (native SDKs) ──────────────────────────────────────────────
   | "anthropic"
   | "openai"
   | "openai-codex"
-  | "lmstudio"
+
+  // ── Cloud aggregators ──────────────────────────────────────────────────────
   | "openrouter"
-  | "openai-compatible"
+
+  // ── Frontier labs (OpenAI-compatible) ─────────────────────────────────────
+  | "deepseek"
+  | "mistral"
+  | "groq"
+  | "together"
+  | "xai"
+  | "perplexity"
+  | "fireworks"
+  | "cerebras"
+  | "cohere"
+  | "sambanova"
+  | "novita"
+  | "hyperbolic"
+  | "lambda"
+
+  // ── Google ─────────────────────────────────────────────────────────────────
+  | "google"
+
+  // ── Local / self-hosted ────────────────────────────────────────────────────
+  | "ollama"
+  | "lmstudio"
+  | "llamacpp"
+  | "vllm"
+
+  // ── OpenCode subscriptions ─────────────────────────────────────────────────
   | "opencode-zen"
   | "opencode-go"
+
+  // ── Other known ───────────────────────────────────────────────────────────
   | "z-ai"
   | "minimax"
-  | "kimi";
+  | "kimi"
+
+  // ── Escape hatch for any OpenAI-compatible endpoint ────────────────────────
+  | "openai-compatible";
 
 /**
  * A resolved provider + model ID pair.

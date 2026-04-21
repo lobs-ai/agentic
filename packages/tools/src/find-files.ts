@@ -163,6 +163,7 @@ export async function findFilesTool(
 
 export class FindFilesTool extends BaseTool {
   readonly name = "find-files";
+  readonly tags = ["filesystem", "readonly", "search"] as const;
   readonly description = findFilesToolDefinition.description;
   readonly inputSchema = findFilesToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

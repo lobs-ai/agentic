@@ -223,6 +223,7 @@ export { createReadSnapshot };
 
 export class EditTool extends BaseTool {
   readonly name = "edit";
+  readonly tags = ["filesystem", "write"] as const;
   readonly description = editToolDefinition.description;
   readonly inputSchema = editToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

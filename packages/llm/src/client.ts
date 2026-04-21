@@ -29,9 +29,14 @@ import type {
 /**
  * Well-known model-name prefixes and their canonical providers.
  * Checked in order; first match wins. Case-insensitive.
+ *
+ * Add an entry here to teach the auto-router about a new model family.
  */
 const MODEL_PROVIDER_PREFIXES: Array<[string, Provider]> = [
+  // Anthropic
   ["claude", "anthropic"],
+
+  // OpenAI
   ["codex-", "openai-codex"],
   ["gpt-", "openai"],
   ["o1-", "openai"],
@@ -41,6 +46,40 @@ const MODEL_PROVIDER_PREFIXES: Array<[string, Provider]> = [
   ["o4-", "openai"],
   ["o4", "openai"],
   ["text-davinci", "openai"],
+  ["text-embedding", "openai"],
+
+  // Google
+  ["gemini-", "google"],
+  ["gemini", "google"],
+
+  // DeepSeek
+  ["deepseek-", "deepseek"],
+
+  // Mistral / Mixtral / Codestral
+  ["mistral-", "mistral"],
+  ["mixtral-", "mistral"],
+  ["codestral-", "mistral"],
+
+  // Groq-hosted open models (llama, gemma, etc.)
+  ["llama-", "groq"],
+  ["llama3", "groq"],
+  ["gemma-", "groq"],
+  ["qwen-", "groq"],
+  ["whisper-", "groq"],
+
+  // xAI Grok
+  ["grok-", "xai"],
+
+  // Cohere
+  ["command-", "cohere"],
+  ["embed-", "cohere"],
+
+  // Perplexity
+  ["sonar-", "perplexity"],
+  ["r1-", "perplexity"],
+
+  // Local (Ollama default)
+  ["ollama:", "ollama"],
 ];
 
 /**
@@ -61,17 +100,42 @@ export function inferProvider(model: string): Provider | null {
 // ── parseModelString ──────────────────────────────────────────────────────────
 
 const KNOWN_PROVIDERS: Provider[] = [
+  // Native SDKs
   "anthropic",
   "openai",
   "openai-codex",
-  "lmstudio",
+  // Cloud aggregators
   "openrouter",
-  "openai-compatible",
+  // Frontier labs
+  "deepseek",
+  "mistral",
+  "groq",
+  "together",
+  "xai",
+  "perplexity",
+  "fireworks",
+  "cerebras",
+  "cohere",
+  "sambanova",
+  "novita",
+  "hyperbolic",
+  "lambda",
+  // Google
+  "google",
+  // Local / self-hosted
+  "ollama",
+  "lmstudio",
+  "llamacpp",
+  "vllm",
+  // OpenCode
   "opencode-zen",
   "opencode-go",
+  // Other
   "z-ai",
   "minimax",
   "kimi",
+  // Escape hatch
+  "openai-compatible",
 ];
 
 /**
@@ -152,122 +216,106 @@ export function parseModelString(model: string): ProviderConfig {
  * });
  * ```
  */
+/**
+ * Maps provider names to their environment variable for the API key.
+ * Providers not listed here use the convention `<PROVIDER>_API_KEY`
+ * (upper-cased, hyphens replaced with underscores).
+ */
+const PROVIDER_ENV_VARS: Partial<Record<Provider, string>> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  "openai-codex": "OPENAI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  google: "GOOGLE_API_KEY",
+  groq: "GROQ_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  together: "TOGETHER_API_KEY",
+  xai: "XAI_API_KEY",
+  perplexity: "PPLX_API_KEY",
+  fireworks: "FIREWORKS_API_KEY",
+  cerebras: "CEREBRAS_API_KEY",
+  cohere: "COHERE_API_KEY",
+  sambanova: "SAMBANOVA_API_KEY",
+  novita: "NOVITA_API_KEY",
+  hyperbolic: "HYPERBOLIC_API_KEY",
+  lambda: "LAMBDA_API_KEY",
+  minimax: "MINIMAX_API_KEY",
+  kimi: "KIMI_API_KEY",
+  "z-ai": "ZAI_API_KEY",
+  "opencode-zen": "OPENCODE_API_KEY",
+  "opencode-go": "OPENCODE_API_KEY",
+  "openai-compatible": "OPENAI_COMPATIBLE_API_KEY",
+};
+
+/** Derive the env var name for a provider using the standard convention. */
+function defaultEnvVar(provider: string): string {
+  return `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
+}
+
 export function createClient(model: string, config?: ClientConfig): LLMClient {
   const { provider, modelId } = parseModelString(model);
 
-  // Helper: get first key for a provider from config
-  const getKey = (providerName: string): string | undefined =>
-    config?.keys?.[providerName]?.keys?.[0]?.key;
+  const getKey = (p: string): string | undefined =>
+    config?.keys?.[p]?.keys?.[0]?.key;
+  const getBaseUrl = (p: string): string | undefined =>
+    config?.baseUrls?.[p as Provider];
 
-  // Helper: get base URL for a provider
-  const getBaseUrl = (providerName: string): string | undefined =>
-    config?.baseUrls?.[providerName as Provider];
-
-  switch (provider) {
-    case "anthropic": {
-      const apiKey = getKey("anthropic") ?? process.env.ANTHROPIC_API_KEY;
-      return new AnthropicClient({
-        apiKey,
-        baseURL: getBaseUrl("anthropic"),
-      });
-    }
-
-    case "openai":
-    case "openai-codex": {
-      const apiKey = getKey("openai") ?? process.env.OPENAI_API_KEY;
-      return new OpenAIClient({
-        apiKey,
-        baseURL: getBaseUrl("openai"),
-      });
-    }
-
-    case "openrouter": {
-      const apiKey =
-        getKey("openrouter") ?? process.env.OPENROUTER_API_KEY;
-      return buildCompatibleClient({
-        provider: "openrouter",
-        apiKey,
-        baseURL: getBaseUrl("openrouter"),
-        defaultHeaders: { "X-Title": "agentic/llm" },
-      });
-    }
-
-    case "lmstudio": {
-      return buildCompatibleClient({
-        provider: "lmstudio",
-        apiKey: "not-required",
-        baseURL: getBaseUrl("lmstudio"),
-      });
-    }
-
-    case "opencode-zen": {
-      const apiKey = getKey("opencode-zen") ?? process.env.OPENCODE_API_KEY;
-      return buildCompatibleClient({
-        provider: "opencode-zen",
-        apiKey,
-        baseURL: getBaseUrl("opencode-zen"),
-      });
-    }
-
-    case "opencode-go": {
-      const apiKey = getKey("opencode-go") ?? process.env.OPENCODE_API_KEY;
-      return buildCompatibleClient({
-        provider: "opencode-go",
-        apiKey,
-        baseURL: getBaseUrl("opencode-go"),
-      });
-    }
-
-    case "z-ai": {
-      const apiKey = getKey("z-ai") ?? process.env.ZAI_API_KEY;
-      return buildCompatibleClient({
-        provider: "z-ai",
-        apiKey,
-        baseURL: getBaseUrl("z-ai"),
-      });
-    }
-
-    case "minimax": {
-      const apiKey = getKey("minimax") ?? process.env.MINIMAX_API_KEY;
-      return buildCompatibleClient({
-        provider: "minimax",
-        apiKey,
-        baseURL: getBaseUrl("minimax"),
-      });
-    }
-
-    case "kimi": {
-      const apiKey = getKey("kimi") ?? process.env.KIMI_API_KEY;
-      return buildCompatibleClient({
-        provider: "kimi",
-        apiKey,
-        baseURL: getBaseUrl("kimi"),
-      });
-    }
-
-    case "openai-compatible": {
-      const apiKey = getKey("openai-compatible") ?? process.env.OPENAI_COMPATIBLE_API_KEY;
-      const baseURL =
-        getBaseUrl("openai-compatible") ??
-        process.env.OPENAI_COMPATIBLE_BASE_URL;
-      if (!baseURL) {
-        throw new Error(
-          `Provider "openai-compatible" requires a baseURL. ` +
-            `Set config.baseUrls["openai-compatible"] or OPENAI_COMPATIBLE_BASE_URL.`,
-        );
-      }
-      return buildCompatibleClient({
-        provider: "openai-compatible",
-        apiKey,
-        baseURL,
-      });
-    }
-
-    default: {
-      const _exhaustive: never = provider;
-      throw new Error(`Unhandled provider: ${_exhaustive}`);
-    }
+  // ── Anthropic (native SDK) ────────────────────────────────────────────────
+  if (provider === "anthropic") {
+    return new AnthropicClient({
+      apiKey: getKey("anthropic") ?? process.env.ANTHROPIC_API_KEY,
+      baseURL: getBaseUrl("anthropic"),
+    });
   }
+
+  // ── OpenAI (native SDK) ───────────────────────────────────────────────────
+  if (provider === "openai" || provider === "openai-codex") {
+    return new OpenAIClient({
+      apiKey: getKey("openai") ?? process.env.OPENAI_API_KEY,
+      baseURL: getBaseUrl("openai"),
+    });
+  }
+
+  // ── openai-compatible (explicit, requires baseURL) ────────────────────────
+  if (provider === "openai-compatible") {
+    const baseURL =
+      getBaseUrl("openai-compatible") ??
+      process.env.OPENAI_COMPATIBLE_BASE_URL;
+    if (!baseURL) {
+      throw new Error(
+        `Provider "openai-compatible" requires a baseURL. ` +
+          `Set config.baseUrls["openai-compatible"] or OPENAI_COMPATIBLE_BASE_URL.`,
+      );
+    }
+    return buildCompatibleClient({
+      provider: "openai-compatible",
+      apiKey: getKey("openai-compatible") ?? process.env.OPENAI_COMPATIBLE_API_KEY,
+      baseURL,
+    });
+  }
+
+  // ── All remaining providers are OpenAI-compatible ─────────────────────────
+  // Key resolution: config → env var from PROVIDER_ENV_VARS → convention
+  const envVarName = PROVIDER_ENV_VARS[provider as Provider] ?? defaultEnvVar(provider);
+  const apiKey = getKey(provider) ?? process.env[envVarName];
+  const baseURL = getBaseUrl(provider);
+
+  // Local providers that don't need an API key
+  const LOCAL_PROVIDERS = new Set(["ollama", "lmstudio", "llamacpp", "vllm"]);
+  const effectiveApiKey = apiKey ?? (LOCAL_PROVIDERS.has(provider) ? "not-required" : undefined);
+
+  // OpenRouter gets an identifying header for their dashboard
+  const defaultHeaders = provider === "openrouter"
+    ? { "X-Title": "agentic/llm" }
+    : undefined;
+
+  return buildCompatibleClient({
+    provider,
+    apiKey: effectiveApiKey,
+    baseURL,
+    defaultHeaders,
+  });
 }
 
 // ── Re-export for convenience ─────────────────────────────────────────────────

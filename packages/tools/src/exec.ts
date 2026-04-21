@@ -226,6 +226,7 @@ export async function execTool(
 
 export class ExecTool extends BaseTool {
   readonly name = "exec";
+  readonly tags = ["exec", "shell"] as const;
   readonly description = execToolDefinition.description;
   readonly inputSchema = execToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

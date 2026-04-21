@@ -164,6 +164,7 @@ export async function readTool(
 
 export class ReadTool extends BaseTool {
   readonly name = "read";
+  readonly tags = ["filesystem", "readonly"] as const;
   readonly description = readToolDefinition.description;
   readonly inputSchema = readToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 

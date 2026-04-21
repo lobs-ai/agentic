@@ -196,6 +196,7 @@ export async function codeSearchTool(
 
 export class CodeSearchTool extends BaseTool {
   readonly name = "code-search";
+  readonly tags = ["filesystem", "readonly", "search"] as const;
   readonly description = codeSearchToolDefinition.description;
   readonly inputSchema = codeSearchToolDefinition.input_schema as import("./base-tool.js").ToolInputSchema;
 
