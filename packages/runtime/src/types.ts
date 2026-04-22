@@ -263,8 +263,12 @@ export interface AgentDefaults {
   model?: string;
   /** Default working directory. Defaults to `process.cwd()`. */
   cwd?: string;
-  /** Default timeout in seconds. Default: 300 */
-  timeout?: number;
+  /**
+   * Default timeout for runs. Accepts `number` (seconds, total wall clock)
+   * or a `TimeoutConfig` object for granular budgets:
+   * `{ total, perTurn, perTool, perLlmCall }`. Default: 300 (total only).
+   */
+  timeout?: import("@agentic/runner").TimeoutInput;
   /** Default maximum LLM turns. Default: 100 */
   maxTurns?: number;
   /** Default maximum tokens per response. Default: 16384 */

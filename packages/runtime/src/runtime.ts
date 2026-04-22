@@ -57,6 +57,7 @@ import {
   type ContextEngine,
   type AgentConfig,
   type AgentContext,
+  type TimeoutInput,
 } from "@agentic/runner";
 import { discoverTools, loadToolFile } from "./discover.js";
 import { createContextEngine } from "./context-factory.js";
@@ -328,12 +329,12 @@ export class AgenticRuntime {
     config: Partial<AgentConfig> & {
       model?: string;
       cwd?: string;
-      timeout?: number;
+      timeout?: TimeoutInput;
     } = {},
   ): Agent {
     const model = config.model ?? this._defaults.model;
     const cwd = config.cwd ?? this._defaults.cwd ?? process.cwd();
-    const timeout = config.timeout ?? this._defaults.timeout ?? 300;
+    const timeout: TimeoutInput = config.timeout ?? this._defaults.timeout ?? 300;
 
     if (!model) {
       throw new Error(
@@ -487,7 +488,7 @@ export class AgenticRuntime {
     config: Partial<AgentConfig> & {
       model?: string;
       cwd?: string;
-      timeout?: number;
+      timeout?: TimeoutInput;
       /** Human-readable name for logging / identification. */
       name?: string;
     },

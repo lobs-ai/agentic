@@ -36,6 +36,7 @@ import type {
   AgentContext,
   ProgressUpdate,
   ToolExecutor,
+  TimeoutInput,
 } from "./types.js";
 import type { ContextEngine } from "./context-engine.js";
 import type { Session } from "./session.js";
@@ -52,8 +53,12 @@ export interface AgentConfig {
   model: string;
   /** Working directory for file/exec tools. */
   cwd: string;
-  /** Maximum wall-clock seconds per run. */
-  timeout: number;
+  /**
+   * Timeout for the run. Accepts a `number` (seconds = total wall clock) or
+   * a `TimeoutConfig` object for granular control over total / per-turn /
+   * per-tool / per-LLM-call budgets.
+   */
+  timeout: TimeoutInput;
   /** Agent type label used in logging and default system prompt. */
   agent?: string;
   /** Tool names to expose (defaults to all registered tools). */

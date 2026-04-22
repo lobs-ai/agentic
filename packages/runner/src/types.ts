@@ -9,6 +9,47 @@ import type { ToolRegistry } from "@agentic/tools";
 import type { ContextEngine } from "./context-engine.js";
 import type { Session } from "./session.js";
 
+// ── Timeout Config ────────────────────────────────────────────────────────────
+
+/**
+ * Granular timeout config for an agent run.
+ *
+ * All values are in seconds. Any field may be omitted; omitted fields are
+ * unbounded (except `total` and `perTool`, which fall back to library
+ * defaults of 300s each).
+ *
+ * A run ends when *any* active timer fires. The resulting error message
+ * identifies which timer tripped so callers can tell a slow tool apart
+ * from a stuck LLM call or a genuinely long conversation.
+ */
+export interface TimeoutConfig {
+  /** Overall wall-clock budget for the run. Default: 300. */
+  total?: number;
+  /** Budget for a single LLM turn (think → tools). No default. */
+  perTurn?: number;
+  /** Budget for a single tool call. Default: 300. */
+  perTool?: number;
+  /** Budget for a single LLM request. No default. */
+  perLlmCall?: number;
+}
+
+/** Accepted shape on public APIs — a bare number means `{ total: n }`. */
+export type TimeoutInput = number | TimeoutConfig;
+
+/**
+ * Normalize `TimeoutInput` to a resolved `TimeoutConfig` with defaults
+ * applied. Exported so callers can introspect the final shape.
+ */
+export function normalizeTimeout(input: TimeoutInput | undefined): TimeoutConfig {
+  if (typeof input === "number") return { total: input, perTool: 300 };
+  return {
+    total: input?.total ?? 300,
+    perTurn: input?.perTurn,
+    perTool: input?.perTool ?? 300,
+    perLlmCall: input?.perLlmCall,
+  };
+}
+
 // ── Agent Spec ────────────────────────────────────────────────────────────────
 
 /**
@@ -33,8 +74,23 @@ export interface AgentSpec {
   /** Tools to make available to the agent. */
   tools: string[];
 
-  /** Maximum wall-clock time in seconds before the run is aborted. */
-  timeout: number;
+  /**
+   * Timeout configuration for the run.
+   *
+   * Accepts either:
+   * - a `number` (seconds) — treated as `total` wall-clock time (legacy shape).
+   * - a `TimeoutConfig` object granting finer control:
+   *   - `total`       — overall run wall clock
+   *   - `perTurn`     — reset each LLM turn; fires if a single think→tool→tool
+   *                     round exceeds this budget
+   *   - `perTool`     — maximum seconds a single tool call may run
+   *                     (replaces the previous 5-minute hardcoded cap)
+   *   - `perLlmCall`  — maximum seconds a single LLM request may take
+   *
+   * Any subset may be provided. Omitted fields are unbounded (except the
+   * library-wide defaults: `total = 300`, `perTool = 300`).
+   */
+  timeout: TimeoutInput;
 
   /** System prompt override. When omitted the runner uses a generic prompt. */
   systemPrompt?: string;

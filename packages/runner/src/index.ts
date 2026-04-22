@@ -37,8 +37,10 @@ export type {
   ToolExecutor,
   ProgressUpdate,
   RunnerToolDefinition,
+  TimeoutConfig,
+  TimeoutInput,
 } from "./types.js";
-export { MODEL_COSTS } from "./types.js";
+export { MODEL_COSTS, normalizeTimeout } from "./types.js";
 
 // ── Hook registry ─────────────────────────────────────────────────────────────
 export {

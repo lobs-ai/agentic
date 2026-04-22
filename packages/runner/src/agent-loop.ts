@@ -21,6 +21,7 @@ import {
   type ToolResult,
   type TokenUsage,
   MODEL_COSTS,
+  normalizeTimeout,
 } from "./types.js";
 import { getToolDefinitions, executeTool } from "./tool-registry.js";
 import { getHookRegistry } from "./hooks.js";
@@ -36,7 +37,6 @@ export type { AgentSpec, AgentResult };
 
 const DEFAULT_MAX_TURNS = 100;
 const DEFAULT_MAX_TOKENS = 16384;
-const TOOL_TIMEOUT_MS = 5 * 60_000; // 5 minutes per tool call
 const TRANSIENT_ERRORS = ["overloaded", "529", "timeout", "network", "ECONNRESET"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,7 +68,8 @@ function isTransientError(message: string): boolean {
  * max turns.
  */
 export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
-  const { task, agent, model, timeout } = spec;
+  const { task, agent, model } = spec;
+  const timeoutCfg = normalizeTimeout(spec.timeout);
   let cwd = spec.cwd;
   const maxTurns = spec.maxTurns ?? DEFAULT_MAX_TURNS;
   const maxTokens = spec.maxTokens ?? DEFAULT_MAX_TOKENS;
@@ -120,12 +121,24 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
     timestamp: new Date(),
   });
 
-  // ── Timeout guard ─────────────────────────────────────────────────────────
-  const timeoutMs = timeout * 1000;
+  // ── Timeout guards ────────────────────────────────────────────────────────
+  // A run ends when any active timer fires. `timedOutKind` records which one.
   let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-  }, timeoutMs);
+  let timedOutKind: "total" | "perTurn" | "perLlmCall" | "perTool" | null = null;
+  const totalMs = (timeoutCfg.total ?? 300) * 1000;
+  const totalHandle = setTimeout(() => {
+    if (!timedOut) {
+      timedOut = true;
+      timedOutKind = "total";
+    }
+  }, totalMs);
+  const activeHandles: NodeJS.Timeout[] = [totalHandle];
+  const markTimedOut = (kind: "perTurn" | "perLlmCall" | "perTool"): void => {
+    if (!timedOut) {
+      timedOut = true;
+      timedOutKind = kind;
+    }
+  };
 
   const finish = (
     succeeded: boolean,
@@ -149,6 +162,19 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
     // ── Main loop ─────────────────────────────────────────────────────────
     while (turns < maxTurns && !timedOut) {
       turns++;
+
+      // ── Per-turn timer ──────────────────────────────────────────────────
+      // Starts fresh at the top of each LLM turn. When set, bounds the
+      // think-plus-tool-execution block so a single pathological turn can't
+      // blow the whole run; the `total` timer is still authoritative.
+      let turnHandle: NodeJS.Timeout | null = null;
+      if (timeoutCfg.perTurn && timeoutCfg.perTurn > 0) {
+        turnHandle = setTimeout(
+          () => markTimedOut("perTurn"),
+          timeoutCfg.perTurn * 1000,
+        );
+        activeHandles.push(turnHandle);
+      }
 
       // ── Context compaction ──────────────────────────────────────────────
       if (turns > 1 && contextEngine.shouldCompact(messages, model)) {
@@ -195,10 +221,23 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
           model: parsed.modelId,
           maxTokens,
         };
-        if (spec.onTextChunk && llm.streamMessage) {
-          response = await llm.streamMessage(llmParams, spec.onTextChunk);
+        const llmPromise =
+          spec.onTextChunk && llm.streamMessage
+            ? llm.streamMessage(llmParams, spec.onTextChunk)
+            : llm.createMessage(llmParams);
+        if (timeoutCfg.perLlmCall && timeoutCfg.perLlmCall > 0) {
+          const perLlmMs = timeoutCfg.perLlmCall * 1000;
+          response = await Promise.race([
+            llmPromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`LLM call exceeded perLlmCall (${timeoutCfg.perLlmCall}s)`)),
+                perLlmMs,
+              ),
+            ),
+          ]);
         } else {
-          response = await llm.createMessage(llmParams);
+          response = await llmPromise;
         }
       } catch (err: unknown) {
         const error = err instanceof Error ? err : new Error(String(err));
@@ -344,13 +383,14 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
               executePromise = executeTool(toolName, toolInput, toolUseId, cwd);
             }
 
+            const perToolSec = timeoutCfg.perTool ?? 300;
             result = await Promise.race([
               executePromise,
               new Promise<ToolResult>((_, reject) =>
-                setTimeout(
-                  () => reject(new Error("Tool execution timed out")),
-                  TOOL_TIMEOUT_MS,
-                ),
+                setTimeout(() => {
+                  markTimedOut("perTool");
+                  reject(new Error(`Tool execution exceeded perTool (${perToolSec}s)`));
+                }, perToolSec * 1000),
               ),
             ]);
           } catch (err: unknown) {
@@ -436,13 +476,15 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
           },
         ],
       });
+
+      if (turnHandle) clearTimeout(turnHandle);
     } // end main loop
 
     // ── maxTurns / timeout ─────────────────────────────────────────────────
     const reason = timedOut ? "timeout" : "max_turns";
     const errorMsg =
       reason === "timeout"
-        ? `Agent timeout exceeded (${timeout}s)`
+        ? formatTimeoutError(timedOutKind, timeoutCfg)
         : `Max turns (${maxTurns}) exceeded`;
 
     await hooks.emit("after_agent_end", {
@@ -461,7 +503,24 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
 
     return finish(false, "", reason, errorMsg);
   } finally {
-    clearTimeout(timeoutHandle);
+    for (const h of activeHandles) clearTimeout(h);
+  }
+}
+
+function formatTimeoutError(
+  kind: "total" | "perTurn" | "perLlmCall" | "perTool" | null,
+  cfg: { total?: number; perTurn?: number; perLlmCall?: number; perTool?: number },
+): string {
+  switch (kind) {
+    case "perTurn":
+      return `Agent timeout exceeded — perTurn (${cfg.perTurn}s)`;
+    case "perLlmCall":
+      return `Agent timeout exceeded — perLlmCall (${cfg.perLlmCall}s)`;
+    case "perTool":
+      return `Agent timeout exceeded — perTool (${cfg.perTool}s)`;
+    case "total":
+    default:
+      return `Agent timeout exceeded — total (${cfg.total}s)`;
   }
 }
 

@@ -130,6 +130,7 @@ export {
   compactMessages,
   SessionTranscript,
   MODEL_COSTS,
+  normalizeTimeout,
 } from "@agentic/runner";
 export type {
   AgentSpec,
@@ -148,6 +149,8 @@ export type {
   TurnRecord,
   SessionSummary,
   SessionStore,
+  TimeoutConfig,
+  TimeoutInput,
 } from "@agentic/runner";
 
 // @agentic/llm
