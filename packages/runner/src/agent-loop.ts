@@ -124,7 +124,7 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
   // ── Timeout guards ────────────────────────────────────────────────────────
   // A run ends when any active timer fires. `timedOutKind` records which one.
   let timedOut = false;
-  let timedOutKind: "total" | "perTurn" | "perLlmCall" | "perTool" | null = null;
+  let timedOutKind: "total" | "perTurn" | "perLlmCall" | null = null;
   const totalMs = (timeoutCfg.total ?? 300) * 1000;
   const totalHandle = setTimeout(() => {
     if (!timedOut) {
@@ -133,7 +133,7 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
     }
   }, totalMs);
   const activeHandles: NodeJS.Timeout[] = [totalHandle];
-  const markTimedOut = (kind: "perTurn" | "perLlmCall" | "perTool"): void => {
+  const markTimedOut = (kind: "perTurn" | "perLlmCall"): void => {
     if (!timedOut) {
       timedOut = true;
       timedOutKind = kind;
@@ -383,14 +383,18 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
               executePromise = executeTool(toolName, toolInput, toolUseId, cwd);
             }
 
+            // perTool: a single tool that runs too long is reported back to
+            // the LLM as an error so the agent can try a different approach.
+            // It does NOT kill the run — only `total` / `perTurn` / `perLlmCall`
+            // are fatal, because those indicate systemic stalls.
             const perToolSec = timeoutCfg.perTool ?? 300;
             result = await Promise.race([
               executePromise,
               new Promise<ToolResult>((_, reject) =>
-                setTimeout(() => {
-                  markTimedOut("perTool");
-                  reject(new Error(`Tool execution exceeded perTool (${perToolSec}s)`));
-                }, perToolSec * 1000),
+                setTimeout(
+                  () => reject(new Error(`Tool execution exceeded perTool (${perToolSec}s)`)),
+                  perToolSec * 1000,
+                ),
               ),
             ]);
           } catch (err: unknown) {
@@ -508,16 +512,14 @@ export async function runAgent(spec: AgentSpec): Promise<AgentResult> {
 }
 
 function formatTimeoutError(
-  kind: "total" | "perTurn" | "perLlmCall" | "perTool" | null,
-  cfg: { total?: number; perTurn?: number; perLlmCall?: number; perTool?: number },
+  kind: "total" | "perTurn" | "perLlmCall" | null,
+  cfg: { total?: number; perTurn?: number; perLlmCall?: number },
 ): string {
   switch (kind) {
     case "perTurn":
       return `Agent timeout exceeded — perTurn (${cfg.perTurn}s)`;
     case "perLlmCall":
       return `Agent timeout exceeded — perLlmCall (${cfg.perLlmCall}s)`;
-    case "perTool":
-      return `Agent timeout exceeded — perTool (${cfg.perTool}s)`;
     case "total":
     default:
       return `Agent timeout exceeded — total (${cfg.total}s)`;
