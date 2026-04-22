@@ -63,7 +63,12 @@ export class HtmlToPdfTool extends BaseTool {
     "Supports standard paper formats (A4, Letter, etc.), custom dimensions, margins, landscape, " +
     "background colors/images, scaling, page ranges, and header/footer templates. " +
     "The header/footer templates use Playwright-supported classes: " +
-    "`date`, `title`, `url`, `pageNumber`, `totalPages`.";
+    "`date`, `title`, `url`, `pageNumber`, `totalPages`. " +
+    "For 16:9 slide decks, use: width=\"13.333in\", height=\"7.5in\", margin_top/right/bottom/left=\"0\", " +
+    "prefer_css_page_size=true, print_background=true, emulate_media=\"print\". " +
+    "In the HTML use `@page { size: 13.333in 7.5in; margin: 0 }` and one `<section>` per slide sized " +
+    "13.333in × 7.5in with `page-break-after: always`. Specify font-size in pt/px — never in inches " +
+    "(1in = 72pt, so e.g. `font-size: 2in` is a 144pt glyph that will overflow the page).";
   readonly inputSchema = {
     type: "object" as const,
     properties: {
