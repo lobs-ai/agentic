@@ -74,7 +74,23 @@ export {
 } from "./pptx.js";
 
 // ── HTML → PDF ────────────────────────────────────────────────────────────────
-export { HtmlToPdfTool, htmlToPdfTool } from "./html-to-pdf.js";
+export {
+  HtmlToPdfTool,
+  htmlToPdfTool,
+  HtmlCheckTool,
+  htmlCheckTool,
+  HtmlStyleGuideTool,
+  htmlStyleGuideTool,
+  parseLengthToPx,
+  parseMargins,
+  parsePaper,
+  gatherDiagnostics,
+  PRESETS,
+  PRESET_NAMES,
+  themeCss,
+  injectStyle,
+} from "./html-to-pdf.js";
+export type { HtmlDiagnostics, HtmlOverflowItem, HtmlBrokenImage, ThemeName } from "./html-to-pdf.js";
 
 // ── Built-in tool instances ───────────────────────────────────────────────────
 import { ReadTool } from "./read.js";
@@ -86,7 +102,7 @@ import { GrepTool } from "./grep.js";
 import { GlobTool } from "./glob.js";
 import { FindFilesTool } from "./find-files.js";
 import { CodeSearchTool } from "./code-search.js";
-import { HtmlToPdfTool } from "./html-to-pdf.js";
+import { HtmlToPdfTool, HtmlCheckTool, HtmlStyleGuideTool } from "./html-to-pdf.js";
 import { ToolRegistry } from "./registry.js";
 import type { ToolEntry } from "./types.js";
 import { readToolDefinition, readTool } from "./read.js";
@@ -111,6 +127,8 @@ export const BUILTIN_TOOLS = [
   new FindFilesTool(),
   new CodeSearchTool(),
   new HtmlToPdfTool(),
+  new HtmlCheckTool(),
+  new HtmlStyleGuideTool(),
 ] as const;
 
 /**
